@@ -19,28 +19,10 @@
 			<param-name>com.sun.jersey.config.property.packages</param-name>
 			<param-value>fr.ac_versailles.crdp.apiscol.edit</param-value>
 		</init-param>
-		<init-param>
-			<param-name>com.sun.jersey.spi.container.ContainerRequestFilters</param-name>
-			<param-value>fr.ac_versailles.crdp.apiscol.edit.filters.AuthenticationFilter</param-value>
-		</init-param>
-		<init-param>
-			<param-name>com.sun.jersey.spi.container.ContainerResponseFilters</param-name>
-			<param-value>fr.ac_versailles.crdp.apiscol.edit.filters.AuthenticationFilter</param-value>
-		</init-param>
 		<load-on-startup>1</load-on-startup>
 	</servlet>
 	<servlet-mapping>
 		<servlet-name>ApiScol_Edit</servlet-name>
 		<url-pattern>/*</url-pattern>
 	</servlet-mapping>
-<!-- 	<security-constraint>
-		<display-name>Accès sécurisé ApiScol Edit</display-name>
-		<web-resource-collection>
-			<web-resource-name>apiscoledit</web-resource-name>
-			<url-pattern>/*</url-pattern>
-		</web-resource-collection>
-		<user-data-constraint>
-			<transport-guarantee>CONFIDENTIAL</transport-guarantee>
-		</user-data-constraint>
-	</security-constraint> -->
 </web-app>

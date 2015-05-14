@@ -54,7 +54,6 @@ import fr.ac_versailles.crdp.apiscol.ParametersKeys;
 import fr.ac_versailles.crdp.apiscol.ResourcesKeySyntax;
 import fr.ac_versailles.crdp.apiscol.UsedNamespaces;
 import fr.ac_versailles.crdp.apiscol.edit.fileHandling.TransferRegistry;
-import fr.ac_versailles.crdp.apiscol.edit.filters.SecurityFilter;
 import fr.ac_versailles.crdp.apiscol.edit.sync.SyncAgent;
 import fr.ac_versailles.crdp.apiscol.edit.sync.SyncService;
 import fr.ac_versailles.crdp.apiscol.edit.sync.SyncService.SYNC_MODES;
@@ -87,10 +86,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 	private static Client client;
 	private static String fileRepoPath;
 	private static String temporaryFilesPrefix;
-	private static String contentWsSharedSecret;
-	private static String metaWsSharedSecret;
-	private static String packWsSharedSecret;
-	private static String thumbsWsSharedSecret;
 
 	public ResourceEditionAPI(@Context HttpServletRequest request,
 			@Context ServletContext context) {
@@ -104,14 +99,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 		fileRepoPath = getProperty(ParametersKeys.fileRepoPath, context);
 		temporaryFilesPrefix = getProperty(ParametersKeys.temporaryFilesPrefix,
-				context);
-		contentWsSharedSecret = getProperty(
-				ParametersKeys.contentWsSharedSecret, context);
-		metaWsSharedSecret = getProperty(ParametersKeys.metaWsSharedSecret,
-				context);
-		packWsSharedSecret = getProperty(ParametersKeys.packWsSharedSecret,
-				context);
-		thumbsWsSharedSecret = getProperty(ParametersKeys.thumbsWsSharedSecret,
 				context);
 		URI contentWebserviceUrl = null;
 		URI metadataWebserviceUrl = null;
@@ -148,23 +135,12 @@ public class ResourceEditionAPI extends ApiscolApi {
 		}
 		contentWebServiceResource = client.resource(UriBuilder.fromUri(
 				contentWebserviceUrl).build());
-		SecurityFilter securityFilter = new SecurityFilter();
-		securityFilter.addKey(contentWebserviceUrl.toString(),
-				contentWsSharedSecret);
-		securityFilter.addKey(metadataWebserviceUrl.toString(),
-				metaWsSharedSecret);
-		securityFilter.addKey(packWebserviceUrl.toString(), packWsSharedSecret);
 
-		contentWebServiceResource.addFilter(securityFilter);
-		packWebServiceResource.addFilter(securityFilter);
 		metadataWebServiceResource = client.resource(UriBuilder.fromUri(
 				metadataWebserviceUrl).build());
-		metadataWebServiceResource.addFilter(securityFilter);
 		thumbsWebServiceResource = client.resource(UriBuilder.fromUri(
 				thumbsWebserviceUrl).build());
-		securityFilter.addKey(thumbsWebserviceUrl.toString(),
-				thumbsWsSharedSecret);
-		thumbsWebServiceResource.addFilter(securityFilter);
+
 		transferRegistry = new TransferRegistry(fileRepoPath,
 				temporaryFilesPrefix, contentWebServiceResource);
 		urlParsingRegistry = new UrlParsingRegistry(contentWebServiceResource);
@@ -216,6 +192,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		}
 		return Response
 				.status(cr.getStatus())
+				.header("Access-Control-Allow-Origin", "*")
 				.entity(response)
 				.type(MediaType.APPLICATION_XML)
 				.header(HttpHeaders.ETAG,
@@ -237,6 +214,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			SyncService.notifyUriInfo(uriInfo.getBaseUri());
 		if (StringUtils.isBlank(resourceId))
 			return Response.status(Response.Status.BAD_REQUEST)
+					.header("Access-Control-Allow-Origin", "*")
 					.entity("The resource id is not correct").build();
 		if (updateTechnicalInfos) {
 			SyncAgent syncAgent = new SyncAgent(SYNC_MODES.FROM_RESOURCE_ID,
@@ -251,6 +229,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 				e.printStackTrace();
 			}
 			return Response.status(Status.OK)
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(syncAgent.getContentTechInfos())
 					.type(MediaType.APPLICATION_XML).build();
 		}
@@ -269,8 +248,9 @@ public class ResourceEditionAPI extends ApiscolApi {
 		SyncService.forwardContentInformationToMetadata(resourceId);
 		String entity = response.getEntity(String.class);
 		return Response.status(response.getStatus()).entity(entity)
-				.type(response.getType()).header(HttpHeaders.ETAG, etag)
-				.build();
+
+		.type(response.getType()).header(HttpHeaders.ETAG, etag)
+				.header("Access-Control-Allow-Origin", "*").build();
 	}
 
 	@POST
@@ -286,6 +266,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		String entity;
 		if (StringUtils.isBlank(metadataId))
 			return Response.status(Response.Status.BAD_REQUEST)
+					.header("Access-Control-Allow-Origin", "*")
 					.entity("The metadata id is not correct").build();
 		if (updateIndex) {
 			String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
@@ -301,11 +282,11 @@ public class ResourceEditionAPI extends ApiscolApi {
 			entity = response.getEntity(String.class);
 			return Response.status(response.getStatus()).entity(entity)
 					.type(response.getType()).header(HttpHeaders.ETAG, etag)
-					.build();
+					.header("Access-Control-Allow-Origin", "*").build();
 		}
 
 		return Response.status(Status.BAD_REQUEST).entity("No parameter")
-				.build();
+				.header("Access-Control-Allow-Origin", "*").build();
 
 	}
 
@@ -324,6 +305,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			SyncService.notifyUriInfo(uriInfo.getBaseUri());
 		if (StringUtils.isBlank(resourceId))
 			return Response.status(Response.Status.BAD_REQUEST)
+					.header("Access-Control-Allow-Origin", "*")
 					.entity("The resource id is not correct").build();
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
 		MultivaluedMap<String, String> params = new MultivaluedMapImpl();
@@ -346,7 +328,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		String entity = response.getEntity(String.class);
 		return Response.status(response.getStatus()).entity(entity)
 				.type(response.getType()).header(HttpHeaders.ETAG, etag)
-				.build();
+				.header("Access-Control-Allow-Origin", "*").build();
 	}
 
 	private String removeWebServiceUri(String metadataId) {
@@ -416,7 +398,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 					.serverError()
 					.entity("The server was not able to handle your file with this error message :"
 							+ e.getMessage()).type(MediaType.TEXT_PLAIN)
-					.build();
+					.header("Access-Control-Allow-Origin", "*").build();
 		}
 		try {
 			uploadedInputStream.close();
@@ -439,6 +421,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 				.entity(rb.getFileTransferRepresentation(fileTransferId,
 						uriInfo, transferRegistry, contentWebServiceResource
 								.path("resource").getURI()))
+				.header("Access-Control-Allow-Origin", "*")
 				.type(rb.getMediaType()).build();
 	}
 
@@ -469,14 +452,16 @@ public class ResourceEditionAPI extends ApiscolApi {
 					+ url
 					+ " you should specify the resource id as 'resid' query parameter";
 			logger.warn(message);
-			return Response.status(Status.BAD_REQUEST).entity(message).build();
+			return Response.status(Status.BAD_REQUEST).entity(message)
+					.header("Access-Control-Allow-Origin", "*").build();
 		}
 		if (StringUtils.isBlank(url)) {
 			String message = "If you want to parse an url for resource"
 					+ resourceId
 					+ " you should specify the url string as 'url' query parameter.";
 			logger.warn(message);
-			return Response.status(Status.BAD_REQUEST).entity(message).build();
+			return Response.status(Status.BAD_REQUEST).entity(message)
+					.header("Access-Control-Allow-Origin", "*").build();
 		}
 		if (ResourcesKeySyntax.isUrn(resourceId))
 			resourceId = ResourcesKeySyntax
@@ -495,6 +480,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 				.entity(rb.getUrlParsingRespresentation(urlParsingId, uriInfo,
 						urlParsingRegistry,
 						contentWebServiceResource.path("resource").getURI()))
+				.header("Access-Control-Allow-Origin", "*")
 				.type(rb.getMediaType()).build();
 	}
 
@@ -516,6 +502,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 				.entity(rb.getFileTransferRepresentation(transferId, uriInfo,
 						transferRegistry,
 						contentWebServiceResource.path("resource").getURI()))
+				.header("Access-Control-Allow-Origin", "*")
 				.type(rb.getMediaType()).build();
 	}
 
@@ -535,6 +522,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 				.entity(rb.getUrlParsingRespresentation(urlParsingId, uriInfo,
 						urlParsingRegistry,
 						contentWebServiceResource.path("resource").getURI()))
+				.header("Access-Control-Allow-Origin", "*")
 				.type(rb.getMediaType()).build();
 	}
 
@@ -583,7 +571,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			return Response.status(response.getStatus())
 					.entity(response.getEntity(Document.class))
 					.header(HttpHeaders.ETAG, etag).type(response.getType())
-					.build();
+					.header("Access-Control-Allow-Origin", "*").build();
 		} else {
 			String entity = response.getEntity(String.class);
 			return Response
@@ -591,6 +579,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 					.entity(entity)
 					.header(HttpHeaders.ETAG,
 							response.getHeaders().getFirst(HttpHeaders.ETAG))
+					.header("Access-Control-Allow-Origin", "*")
 					.type(response.getType()).build();
 		}
 
@@ -609,10 +598,11 @@ public class ResourceEditionAPI extends ApiscolApi {
 		if (Response.Status.OK.getStatusCode() == status) {
 			Document entity = response.getEntity(Document.class);
 			return Response.ok().entity(entity).type(response.getType())
-					.build();
+					.header("Access-Control-Allow-Origin", "*").header("Access-Control-Allow-Methods", "DELETE").build();
 		} else {
 			String entity = response.getEntity(String.class);
 			return Response.status(status).entity(entity)
+					.header("Access-Control-Allow-Origin", "*")
 					.type(response.getType()).build();
 		}
 
@@ -669,9 +659,11 @@ public class ResourceEditionAPI extends ApiscolApi {
 			// TODO
 			// SyncService.updateMetadataWithContentInformation(metadataId);
 			return Response.status(cr.getStatus()).type(cr.getType())
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(cr.getEntity(Document.class)).build();
 		} else {
 			return Response.status(cr.getStatus()).type(cr.getType())
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(cr.getEntity(String.class)).build();
 		}
 
@@ -720,11 +712,13 @@ public class ResourceEditionAPI extends ApiscolApi {
 		if (Response.Status.OK.getStatusCode() == status) {
 			Document entity = cr.getEntity(Document.class);
 			return Response.status(cr.getStatus()).type(cr.getType())
-					.entity(entity).build();
+					.header("Access-Control-Allow-Origin", "*").entity(entity)
+					.build();
 		} else {
 			String entity = cr.getEntity(String.class);
 			return Response.status(cr.getStatus()).type(cr.getType())
-					.entity(entity).build();
+					.header("Access-Control-Allow-Origin", "*").entity(entity)
+					.build();
 		}
 
 	}
@@ -776,11 +770,13 @@ public class ResourceEditionAPI extends ApiscolApi {
 			Document entity = cr.getEntity(Document.class);
 			// SyncService.updateMetadatas(entity);
 			return Response.status(cr.getStatus()).type(cr.getType())
-					.entity(entity).build();
+					.header("Access-Control-Allow-Origin", "*").entity(entity)
+					.build();
 		} else {
 			String entity = cr.getEntity(String.class);
 			return Response.status(cr.getStatus()).type(cr.getType())
-					.entity(entity).build();
+					.header("Access-Control-Allow-Origin", "*").entity(entity)
+					.build();
 		}
 
 	}
@@ -828,10 +824,12 @@ public class ResourceEditionAPI extends ApiscolApi {
 		int status = response.getStatus();
 		if (Response.Status.OK.getStatusCode() == status) {
 			return Response.status(response.getStatus())
-					.entity(metaXmlResponse).type(response.getType()).build();
+					.entity(metaXmlResponse).type(response.getType())
+					.header("Access-Control-Allow-Origin", "*").build();
 		} else {
 			return Response.status(response.getStatus())
-					.entity(metaXmlResponse).type(response.getType()).build();
+					.entity(metaXmlResponse).type(response.getType())
+					.header("Access-Control-Allow-Origin", "*").build();
 		}
 
 	}
@@ -871,11 +869,13 @@ public class ResourceEditionAPI extends ApiscolApi {
 		if (Response.Status.OK.getStatusCode() == status) {
 			return Response.status(response.getStatus())
 					.entity(response.getEntity(Document.class))
-					.type(response.getType()).build();
+					.type(response.getType())
+					.header("Access-Control-Allow-Origin", "*").build();
 		} else {
 			return Response.status(response.getStatus())
 					.entity(response.getEntity(String.class))
-					.type(response.getType()).build();
+					.type(response.getType())
+					.header("Access-Control-Allow-Origin", "*").build();
 		}
 
 	}
@@ -929,6 +929,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			return Response
 					.status(Status.BAD_REQUEST)
 					.type(MediaType.TEXT_PLAIN)
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(String.format("The web service %s does not exist",
 							serviceName)).build();
 		}
@@ -936,6 +937,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			return Response
 					.status(Status.BAD_REQUEST)
 					.type(MediaType.TEXT_PLAIN)
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(String
 							.format("The operation %s does not apply to the web service %s",
 									requestedOperation, serviceName)).build();
@@ -951,11 +953,13 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 		if (Response.Status.OK.getStatusCode() == status) {
 			return Response.ok().entity(response.getEntity(Document.class))
-					.type(response.getType()).build();
+					.type(response.getType())
+					.header("Access-Control-Allow-Origin", "*").build();
 		} else {
 			return Response.status(response.getStatus())
 					.entity(response.getEntity(String.class))
-					.type(response.getType()).build();
+					.type(response.getType())
+					.header("Access-Control-Allow-Origin", "*").build();
 		}
 	}
 
@@ -1001,10 +1005,12 @@ public class ResourceEditionAPI extends ApiscolApi {
 					ifMatch, thumbUri);
 			return Response.status(thumbsWebServiceResponse.getStatus())
 					.type(thumbsWebServiceResponse.getType())
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(thumbsDocument).build();
 		} else {
 			return Response.status(status)
 					.type(thumbsWebServiceResponse.getType())
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(thumbsDocument).build();
 		}
 	}
@@ -1054,14 +1060,16 @@ public class ResourceEditionAPI extends ApiscolApi {
 				return Response
 						.status(Status.BAD_REQUEST)
 						.entity("If auto parameter is set to true, you cannot specify the image url, but you did : "
-								+ imageUrl).build();
+								+ imageUrl)
+						.header("Access-Control-Allow-Origin", "*").build();
 		if (!syncServiceInitialized)
 			SyncService.notifyUriInfo(uriInfo.getBaseUri());
 		if (!status.equals("default"))
 			return Response
 					.status(Status.BAD_REQUEST)
 					.entity("This thumb status is not accepted at this time "
-							+ status).build();
+							+ status)
+					.header("Access-Control-Allow-Origin", "*").build();
 		if (!metadataId.startsWith(metadataWebServiceResource.getURI()
 				.toString()))
 			throw new UnknownMetadataRepositoryException(
@@ -1088,7 +1096,8 @@ public class ResourceEditionAPI extends ApiscolApi {
 							thumbsWebServiceResponse.getEntity(String.class));
 			logger.error(message);
 			return Response.status(thumbsWebServiceResponse.getStatus())
-					.entity(message).type(MediaType.TEXT_PLAIN).build();
+					.entity(message).type(MediaType.TEXT_PLAIN)
+					.header("Access-Control-Allow-Origin", "*").build();
 
 		} else {
 			thumbsDocument = thumbsWebServiceResponse.getEntity(Document.class);
@@ -1100,7 +1109,8 @@ public class ResourceEditionAPI extends ApiscolApi {
 		updateThumbUriInMetadatas(metadataId, ifMatch, thumbUri);
 		return Response.status(thumbsWebServiceResponse.getStatus())
 				.entity(thumbsDocument)
-				.type(thumbsWebServiceResponse.getType()).build();
+				.type(thumbsWebServiceResponse.getType())
+				.header("Access-Control-Allow-Origin", "*").build();
 	}
 
 	private void updateThumbUriInMetadatas(String metadataId, Object ifMatch,
@@ -1175,9 +1185,11 @@ public class ResourceEditionAPI extends ApiscolApi {
 			Document manifestResponse = cr.getEntity(Document.class);
 			SyncService.updateMetadatas(manifestResponse);
 			return Response.status(cr.getStatus()).type(cr.getType())
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(manifestResponse).build();
 		} else {
 			return Response.status(cr.getStatus()).type(cr.getType())
+					.header("Access-Control-Allow-Origin", "*")
 					.entity(cr.getEntity(String.class)).build();
 		}
 
@@ -1201,12 +1213,14 @@ public class ResourceEditionAPI extends ApiscolApi {
 			Document packXmlResponse = response.getEntity(Document.class);
 
 			return Response.status(response.getStatus())
-					.entity(packXmlResponse).type(response.getType()).build();
+					.entity(packXmlResponse).type(response.getType())
+					.header("Access-Control-Allow-Origin", "*").build();
 		} else {
 			String packResponse = response.getEntity(String.class);
 			System.out.println("response=" + response.getStatus());
 			return Response.status(response.getStatus()).entity(packResponse)
-					.type(MediaType.TEXT_PLAIN).build();
+					.type(MediaType.TEXT_PLAIN)
+					.header("Access-Control-Allow-Origin", "*").build();
 		}
 
 	}
