@@ -49,7 +49,6 @@ import com.sun.jersey.multipart.FormDataMultiPart;
 import com.sun.jersey.multipart.FormDataParam;
 
 import fr.ac_versailles.crdp.apiscol.ApiscolApi;
-import fr.ac_versailles.crdp.apiscol.CustomMediaType;
 import fr.ac_versailles.crdp.apiscol.ParametersKeys;
 import fr.ac_versailles.crdp.apiscol.ResourcesKeySyntax;
 import fr.ac_versailles.crdp.apiscol.UsedNamespaces;
@@ -76,7 +75,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 	private static TransferRegistry transferRegistry;
 
 	private static WebResource contentWebServiceResource;
-	private static WebResource packWebServiceResource;
 	private static WebResource thumbsWebServiceResource;
 	private static WebResource metadataWebServiceResource;
 
@@ -102,7 +100,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 				context);
 		URI contentWebserviceUrl = null;
 		URI metadataWebserviceUrl = null;
-		URI packWebserviceUrl = null;
 		URI thumbsWebserviceUrl = null;
 		try {
 			contentWebserviceUrl = new URI(getProperty(
@@ -118,15 +115,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		try {
-			packWebserviceUrl = new URI(getProperty(
-					ParametersKeys.packWebserviceUrl, context));
-		} catch (URISyntaxException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		packWebServiceResource = client.resource(UriBuilder.fromUri(
-				packWebserviceUrl).build());
 		try {
 			thumbsWebserviceUrl = new URI(getProperty(
 					ParametersKeys.thumbsWebserviceUrl, context));
@@ -598,7 +586,8 @@ public class ResourceEditionAPI extends ApiscolApi {
 		if (Response.Status.OK.getStatusCode() == status) {
 			Document entity = response.getEntity(Document.class);
 			return Response.ok().entity(entity).type(response.getType())
-					.header("Access-Control-Allow-Origin", "*").header("Access-Control-Allow-Methods", "DELETE").build();
+					.header("Access-Control-Allow-Origin", "*")
+					.header("Access-Control-Allow-Methods", "DELETE").build();
 		} else {
 			String entity = response.getEntity(String.class);
 			return Response.status(status).entity(entity)
@@ -711,64 +700,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 		SyncService.updateMetadataWithContentInformation(metadataId);
 		if (Response.Status.OK.getStatusCode() == status) {
 			Document entity = cr.getEntity(Document.class);
-			return Response.status(cr.getStatus()).type(cr.getType())
-					.header("Access-Control-Allow-Origin", "*").entity(entity)
-					.build();
-		} else {
-			String entity = cr.getEntity(String.class);
-			return Response.status(cr.getStatus()).type(cr.getType())
-					.header("Access-Control-Allow-Origin", "*").entity(entity)
-					.build();
-		}
-
-	}
-
-	@PUT
-	@Path("/manifest/{manifestid}")
-	@Produces({ MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_XML })
-	@Consumes(MediaType.MULTIPART_FORM_DATA)
-	public Response changeManifest(@Context HttpServletRequest request,
-			@FormDataParam("file") InputStream uploadedInputStream,
-			@FormDataParam("file") FormDataContentDisposition fileDetail,
-			@PathParam(value = "manifestid") final String manifestId) {
-		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
-		// String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
-		// TODO mettre en place concurrence optimiste
-		System.out.println("***je suis dans resourceEditionAPI***");
-		String ifMatch = "coucou les amis";
-		File file = writeToTempFile(uploadedInputStream);
-		try {
-			uploadedInputStream.close();
-		} catch (IOException e) {
-			logger.warn(String
-					.format("A probleme was encountered while closing the input streamm for file %s : %s",
-							fileDetail.getFileName(), e.getMessage()));
-		}
-		ClientResponse cr;
-		FormDataMultiPart form = null;
-		try {
-			form = new FormDataMultiPart().field("file", file,
-					MediaType.MULTIPART_FORM_DATA_TYPE).field("edit_uri",
-					uriInfo.getBaseUri().toString());
-			cr = packWebServiceResource.path("manifest").path(manifestId)
-					.accept(MediaType.APPLICATION_XML)
-					.type(MediaType.MULTIPART_FORM_DATA)
-					.header(HttpHeaders.IF_MATCH, ifMatch).entity(form)
-					.put(ClientResponse.class);
-		} finally {
-			try {
-				form.close();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		int status = cr.getStatus();
-		// SyncService.updateMetadataWithContentInformation(manifestId);
-		if (Response.Status.OK.getStatusCode() == status) {
-			Document entity = cr.getEntity(Document.class);
-			// SyncService.updateMetadatas(entity);
 			return Response.status(cr.getStatus()).type(cr.getType())
 					.header("Access-Control-Allow-Origin", "*").entity(entity)
 					.build();
@@ -1151,77 +1082,34 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 	}
 
-	@POST
-	@Path("/manifest")
+	@PUT
+	@Path("/meta/{mdid}/hierarchy")
 	@Produces({ MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_XML })
-	@Consumes(MediaType.MULTIPART_FORM_DATA)
-	public Response createManifest(@Context HttpServletRequest request,
-			@FormDataParam("file") InputStream uploadedInputStream,
-			@FormDataParam("file") FormDataContentDisposition fileDetail) {
-		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
-		File file = writeToTempFile(uploadedInputStream);
-		try {
-			uploadedInputStream.close();
-		} catch (IOException e) {
-			logger.warn(String
-					.format("A probleme was encountered while closing the input stream for file %s : %s",
-							fileDetail.getFileName(), e.getMessage()));
-		}
-		FormDataMultiPart form = new FormDataMultiPart().field("file", file,
-				MediaType.MULTIPART_FORM_DATA_TYPE).field("edit_uri",
-				uriInfo.getBaseUri().toString());
+	public Response setMetadataHierarchy(@Context HttpServletRequest request,
+			@PathParam(value = "mdid") final String metadataId,
+			@FormParam(value = "hierarchy") final String hierarchy) {
 
-		ClientResponse cr = packWebServiceResource
-				.accept(MediaType.APPLICATION_XML)
-				.type(MediaType.MULTIPART_FORM_DATA)
-				// send what you want as etag
-				.header(HttpHeaders.IF_MATCH, UUID.randomUUID().toString())
-				.entity(form).post(ClientResponse.class);
-
-		int status = cr.getStatus();
-
-		if (Response.Status.OK.getStatusCode() == status) {
-			Document manifestResponse = cr.getEntity(Document.class);
-			SyncService.updateMetadatas(manifestResponse);
-			return Response.status(cr.getStatus()).type(cr.getType())
+		if (StringUtils.isBlank(hierarchy))
+			return Response.status(Response.Status.BAD_REQUEST)
 					.header("Access-Control-Allow-Origin", "*")
-					.entity(manifestResponse).build();
-		} else {
-			return Response.status(cr.getStatus()).type(cr.getType())
-					.header("Access-Control-Allow-Origin", "*")
-					.entity(cr.getEntity(String.class)).build();
-		}
-
-	}
-
-	@DELETE
-	@Path("/manifest/{manifestid}")
-	@Produces({ MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_XML })
-	public Response deleteManifest(@Context HttpServletRequest request,
-			@PathParam(value = "manifestid") final String manifestId) {
-		System.out.println("***dans le delete de EDIT****");
-		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+					.entity("The hierarchy is empty").build();
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
-		ClientResponse response = packWebServiceResource.path("manifest")
-				.path(manifestId).accept(MediaType.APPLICATION_ATOM_XML)
+		MultivaluedMap<String, String> params = new MultivaluedMapImpl();
+		if (StringUtils.isNotBlank(metadataId))
+			params.add("mdid", metadataId);
+		if (StringUtils.isNotBlank(hierarchy))
+			params.add("hierarchy", hierarchy);
+		params.add("edit_uri", uriInfo.getBaseUri().toString());
+
+		ClientResponse response = metadataWebServiceResource.path(metadataId)
+				.path("hierarchy").accept(MediaType.APPLICATION_XML)
 				.header(HttpHeaders.IF_MATCH, ifMatch)
-				.delete(ClientResponse.class);
-		int status = response.getStatus();
-		if (Response.Status.OK.getStatusCode() == status) {
-			Document packXmlResponse = response.getEntity(Document.class);
+				.put(ClientResponse.class, params);
+		String etag = response.getHeaders().getFirst(HttpHeaders.ETAG);
 
-			return Response.status(response.getStatus())
-					.entity(packXmlResponse).type(response.getType())
-					.header("Access-Control-Allow-Origin", "*").build();
-		} else {
-			String packResponse = response.getEntity(String.class);
-			System.out.println("response=" + response.getStatus());
-			return Response.status(response.getStatus()).entity(packResponse)
-					.type(MediaType.TEXT_PLAIN)
-					.header("Access-Control-Allow-Origin", "*").build();
-		}
-
+		String entity = response.getEntity(String.class);
+		return Response.status(response.getStatus()).entity(entity)
+				.type(response.getType()).header(HttpHeaders.ETAG, etag)
+				.header("Access-Control-Allow-Origin", "*").build();
 	}
 }
