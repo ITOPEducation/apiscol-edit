@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!DOCTYPE project>
-<project default="ask" basedir="." xmlns:ivy="antlib:org.apache.ivy.ant">
+<project default="compile" basedir="." xmlns:ivy="antlib:org.apache.ivy.ant">
 	<taskdef name="if" classname="net.sf.antcontrib.logic.IfTask" />
 
 	<property name="tomcat.home" value="/usr/share/tomcat7" />
@@ -31,28 +31,22 @@
 			<include name="*.jar" />
 		</fileset>
 	</path>
-	<target name="ask">
-		<input message="Build apiscol edit ?" validargs="true,false" addproperty="deploy-edit" defaultvalue="true" />
-		<if>
-			<equals arg1="${deploy-edit}" arg2="true" />
-			<then>
-				<antcall target="compile" />
-			</then>
-		</if>
-	</target>
+
 	<target name="clean">
-		<delete includeemptydirs="true"  failonerror="false">
-			<fileset dir="${build.dir}" includes="**/*"  excludes="**/log4j.properties" />
+		<delete includeemptydirs="true" failonerror="false">
+			<fileset dir="${build.dir}" includes="**/*" excludes="**/log4j.properties" />
 		</delete>
 	</target>
 	<target name="resolve" depends="clean">
 		<ivy:resolve file="${ivy.file}" conf="edit">
 		</ivy:resolve>
-		<ivy:retrieve sync="true" type="jar,bundle" pattern="${libs.dir}/[artifact]-[revision].[ext]" conf="edit" />
+		<ivy:retrieve sync="true" type="jar,bundle"
+			pattern="${libs.dir}/[artifact]-[revision].[ext]" conf="edit" />
 	</target>
 	<target name="compile" depends="resolve">
 		<mkdir dir="${build.dir}" />
-		<javac srcdir="${src.dir}" destdir="${build.dir}" includeantruntime="false">
+		<javac srcdir="${src.dir}" destdir="${build.dir}"
+			includeantruntime="false" debug="true">
 			<classpath>
 				<fileset dir="${libs.dir}">
 					<include name="*.jar" />
@@ -61,7 +55,7 @@
 				</path>
 			</classpath>
 		</javac>
-		<copyfile dest="${build.dir}/log4j.properties" src="${src.dir}/log4j.properties"/>
+		<copyfile dest="${build.dir}/log4j.properties" src="${src.dir}/log4j.properties" />
 	</target>
 
 </project>

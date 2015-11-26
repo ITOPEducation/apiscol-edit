@@ -36,6 +36,7 @@ import javax.xml.parsers.DocumentBuilder;
 import org.apache.commons.lang.StringUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import com.sun.jersey.api.client.Client;
@@ -148,16 +149,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			throws ContentServiceFailureException {
 		if (!syncServiceInitialized)
 			SyncService.notifyUriInfo(uriInfo.getBaseUri());
-		MultivaluedMap<String, String> postParams = new MultivaluedMapImpl();
-		postParams.add("mdid", metadataId);
-		postParams.add("type", scormType);
-		postParams.add("edit_uri", uriInfo.getBaseUri().toString());
-		ClientResponse cr = contentWebServiceResource.path("resource")
-				.accept(MediaType.APPLICATION_XML_TYPE)
-				// send what you want as if match
-				.header(HttpHeaders.IF_MATCH, UUID.randomUUID().toString())
-				.post(ClientResponse.class, postParams);
-		DocumentBuilder parser;
+		ClientResponse cr = createEmptyResource(metadataId, scormType);
 		Document response = null;
 		if (Response.Status.CREATED.getStatusCode() == cr.getStatus()) {
 			response = cr.getEntity(Document.class);
@@ -185,6 +177,20 @@ public class ResourceEditionAPI extends ApiscolApi {
 				.type(MediaType.APPLICATION_XML)
 				.header(HttpHeaders.ETAG,
 						cr.getHeaders().getFirst(HttpHeaders.ETAG)).build();
+	}
+
+	private ClientResponse createEmptyResource(String metadataId,
+			String scormType) {
+		MultivaluedMap<String, String> postParams = new MultivaluedMapImpl();
+		postParams.add("mdid", metadataId);
+		postParams.add("type", scormType);
+		postParams.add("edit_uri", uriInfo.getBaseUri().toString());
+		ClientResponse cr = contentWebServiceResource.path("resource")
+				.accept(MediaType.APPLICATION_XML_TYPE)
+				// send what you want as if match
+				.header(HttpHeaders.IF_MATCH, UUID.randomUUID().toString())
+				.post(ClientResponse.class, postParams);
+		return cr;
 	}
 
 	@POST
@@ -340,14 +346,14 @@ public class ResourceEditionAPI extends ApiscolApi {
 						"thumb").item(0)).getTextContent();
 	}
 
-	private String extractUriFromReport(Document doc) {
+	private String extractUriFromReport(Document doc, String format) {
 		Element root = doc.getDocumentElement();
 		NodeList links = root.getElementsByTagName("link");
 		Element link;
 		for (int i = 0; i < links.getLength(); i++) {
 			link = (Element) links.item(i);
 			if (link.getAttribute("rel").equals("self")
-					&& link.getAttribute("type").equals("text/html"))
+					&& link.getAttribute("type").equals(format))
 				return link.getAttribute("href");
 		}
 		return StringUtils.EMPTY;
@@ -611,7 +617,9 @@ public class ResourceEditionAPI extends ApiscolApi {
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
 	public Response createMetadata(@Context HttpServletRequest request,
 			@FormDataParam("file") InputStream uploadedInputStream,
-			@FormDataParam("file") FormDataContentDisposition fileDetail) {
+			@FormDataParam("file") FormDataContentDisposition fileDetail,
+			@DefaultValue("false")  @FormDataParam(value = "url_autodetect") final boolean urlAutoDetect)
+			throws ContentServiceFailureException {
 		if (!syncServiceInitialized)
 			SyncService.notifyUriInfo(uriInfo.getBaseUri());
 		File file = writeToTempFile(uploadedInputStream);
@@ -645,17 +653,135 @@ public class ResourceEditionAPI extends ApiscolApi {
 		int status = cr.getStatus();
 
 		if (Response.Status.OK.getStatusCode() == status) {
-			// TODO
-			// SyncService.updateMetadataWithContentInformation(metadataId);
+			Document response = cr.getEntity(Document.class);
+			if (urlAutoDetect) {
+				String contentUrl = this
+						.extractContentUrlFromMetadataResponse(response);
+				String metadataId = extractUriFromReport(response, "text/html");
+
+				if (StringUtils.isEmpty(contentUrl)) {
+					logger.warn("Autodetection of url impossible : no url provided");
+				} else {
+					logger.info("Autodetection de l'url " + contentUrl);
+					ClientResponse contentClientResponse = createEmptyResource(
+							metadataId, "url");
+					Document contentXmlResponse = null;
+
+					if (Response.Status.OK.getStatusCode() == cr.getStatus()) {
+						contentXmlResponse = contentClientResponse
+								.getEntity(Document.class);
+					} else {
+						String error = contentClientResponse
+								.getEntity(String.class);
+						throw new ContentServiceFailureException(error);
+					}
+					String resourceUrn = ((Element) contentXmlResponse
+							.getElementsByTagName("entry").item(0))
+							.getElementsByTagName("id").item(0)
+							.getTextContent();
+					String resourceId = ResourcesKeySyntax
+							.extractResourceIdFromUrn(resourceUrn);
+					String contentEtag = extractEtagFromContentDocument(contentXmlResponse);
+					boolean updateArchive = true;
+					if (StringUtils.isNotEmpty(metadataId)) {
+						SyncService
+								.forwardContentInformationToMetadata(resourceId);
+						Integer urlParsingId;
+
+						synchronized (urlParsingRegistry) {
+							urlParsingId = urlParsingRegistry.newUrlParsing(
+									resourceId, contentUrl, updateArchive,
+									contentEtag);
+						}
+						String requestedFormat = request.getContentType();
+						IEntitiesRepresentationBuilder rb = EntitiesRepresentationBuilderFactory
+								.getRepresentationBuilder(requestedFormat,
+										context);
+						Document notReturnedEntity = (Document) rb
+								.getUrlParsingRespresentation(
+										urlParsingId,
+										uriInfo,
+										urlParsingRegistry,
+										contentWebServiceResource.path(
+												"resource").getURI());
+						Node notReturnedEntityRoot = notReturnedEntity
+								.getFirstChild();
+						Node movedNode = response.importNode(
+								notReturnedEntityRoot, true);
+						// replace content url in metadata document
+						response.getDocumentElement().appendChild(movedNode);
+						String contentXMLRepresentationUrl = extractUriFromReport(
+								contentXmlResponse, "application/atom+xml");
+						String contentHTMLRepresentationUrl = extractUriFromReport(
+								contentXmlResponse, "text/html");
+						Element root = response.getDocumentElement();
+						NodeList links = root.getElementsByTagName("link");
+						Element link;
+						for (int i = 0; i < links.getLength(); i++) {
+							link = (Element) links.item(i);
+							if (link.getAttribute("rel").equals("describes")) {
+								if (link.getAttribute("type").equals(
+										"application/atom+xml"))
+									link.setAttribute("href",
+											contentXMLRepresentationUrl);
+								if (link.getAttribute("type").equals(
+										"text/html"))
+									link.setAttribute("href",
+											contentHTMLRepresentationUrl);
+							}
+						}
+
+					}
+
+				}
+			}
+
 			return Response.status(cr.getStatus()).type(cr.getType())
 					.header("Access-Control-Allow-Origin", "*")
-					.entity(cr.getEntity(Document.class)).build();
+					.entity(response).build();
 		} else {
 			return Response.status(cr.getStatus()).type(cr.getType())
 					.header("Access-Control-Allow-Origin", "*")
 					.entity(cr.getEntity(String.class)).build();
 		}
 
+	}
+
+	private String extractContentUrlFromMetadataResponse(Document response) {
+		String contentUrl = "";
+		Boolean goOn = true;
+		NodeList entryElements = response.getElementsByTagName("entry");
+		Element entryElement = null;
+		if (goOn && entryElements.getLength() > 0) {
+			entryElement = (Element) entryElements.item(0);
+		} else {
+			goOn = false;
+		}
+		NodeList linkElements = entryElement.getElementsByTagName("link");
+		Element linkElement = null;
+		int nbLinks = linkElements.getLength();
+		if (goOn && nbLinks > 0) {
+			goOn = false;
+			for (int i = 0; i < nbLinks; i++) {
+				linkElement = (Element) linkElements.item(i);
+				if (linkElement.getAttribute("rel").equals("describes")
+						&& linkElement.getAttribute("type").equals("text/html")) {
+					goOn = true;
+
+					break;
+				}
+
+			}
+
+		} else {
+			goOn = false;
+		}
+		if (goOn && linkElement.hasAttribute("href")) {
+			contentUrl = linkElement.getAttribute("href");
+		} else {
+			goOn = false;
+		}
+		return contentUrl;
 	}
 
 	@PUT
@@ -688,6 +814,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 					.type(MediaType.MULTIPART_FORM_DATA)
 					.header(HttpHeaders.IF_MATCH, ifMatch).entity(form)
 					.put(ClientResponse.class);
+
 		} finally {
 			try {
 				form.close();
@@ -727,7 +854,8 @@ public class ResourceEditionAPI extends ApiscolApi {
 		MultivaluedMap<String, String> thumbsQueryParams = new MultivaluedMapImpl();
 		Document metaXmlResponse = response.getEntity(Document.class);
 
-		thumbsQueryParams.add("mdids", extractUriFromReport(metaXmlResponse));
+		thumbsQueryParams.add("mdids",
+				extractUriFromReport(metaXmlResponse, "text/html"));
 
 		// first we ask to get the last thumb etag
 		ClientResponse thumbsWebServiceResponse1 = thumbsWebServiceResource
@@ -738,10 +866,10 @@ public class ResourceEditionAPI extends ApiscolApi {
 		try {
 			Document thumbXMLResponse = thumbsWebServiceResponse1
 					.getEntity(Document.class);
-			String thumbEtag = extractEtag(thumbXMLResponse);
+			String thumbEtag = extractEtagFromThumbDocument(thumbXMLResponse);
 			MultivaluedMap<String, String> thumbsQueryParams2 = new MultivaluedMapImpl();
 			thumbsQueryParams2.add("mdid",
-					extractUriFromReport(metaXmlResponse));
+					extractUriFromReport(metaXmlResponse, "text/html"));
 			thumbsWebServiceResource.queryParams(thumbsQueryParams2)
 					.accept(MediaType.APPLICATION_XML_TYPE)
 					.header(HttpHeaders.IF_MATCH, thumbEtag)
@@ -765,11 +893,25 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 	}
 
-	private String extractEtag(Document doc) {
-		System.out.println(XMLUtils.XMLToString(doc));
+	private String extractEtagFromThumbDocument(Document doc) {
 		// TODO better catch excetions
 		return ((Element) doc.getDocumentElement()
 				.getElementsByTagName("thumb").item(0)).getAttribute("version");
+	}
+
+	private String extractEtagFromContentDocument(Document doc) {
+		NodeList entryElements = doc.getElementsByTagName("entry");
+		Element entryElement = null;
+		if (entryElements.getLength() > 0) {
+			entryElement = (Element) entryElements.item(0);
+			NodeList updatedElements = doc.getElementsByTagName("updated");
+			Element updatedElement = null;
+			if (updatedElements.getLength() > 0) {
+				updatedElement = (Element) updatedElements.item(0);
+				return updatedElement.getTextContent();
+			}
+		}
+		return "";
 	}
 
 	@DELETE

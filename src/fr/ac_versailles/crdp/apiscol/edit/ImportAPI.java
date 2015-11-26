@@ -41,7 +41,6 @@ public class ImportAPI {
 			e.printStackTrace();
 		}
 		writeStreamToFile(uploadedInputStream, tempFile);
-		System.out.println(tempFile.getAbsolutePath());
 		return Response.ok().build();
 	}
 
