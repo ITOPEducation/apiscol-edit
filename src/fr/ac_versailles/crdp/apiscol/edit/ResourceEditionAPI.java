@@ -615,15 +615,18 @@ public class ResourceEditionAPI extends ApiscolApi {
 	@Path("/meta")
 	@Produces({ MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_XML })
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
-	public Response createMetadata(@Context HttpServletRequest request,
+	public Response createMetadata(
+			@Context HttpServletRequest request,
 			@FormDataParam("file") InputStream uploadedInputStream,
 			@FormDataParam("file") FormDataContentDisposition fileDetail,
-			@DefaultValue("false")  @FormDataParam(value = "url_autodetect") final boolean urlAutoDetect)
-			throws ContentServiceFailureException {
+			@DefaultValue("false") @FormDataParam(value = "url_autodetect") final boolean urlAutoDetect)
+			throws ContentServiceFailureException,
+			UnknownMetadataRepositoryException, UnknownMetadataException {
 		if (!syncServiceInitialized)
 			SyncService.notifyUriInfo(uriInfo.getBaseUri());
 		File file = writeToTempFile(uploadedInputStream);
 		try {
+
 			uploadedInputStream.close();
 		} catch (IOException e) {
 			logger.warn(String
@@ -729,6 +732,52 @@ public class ResourceEditionAPI extends ApiscolApi {
 									link.setAttribute("href",
 											contentHTMLRepresentationUrl);
 							}
+						}
+						MultivaluedMap<String, String> thumbsQueryParams = new MultivaluedMapImpl();
+						thumbsQueryParams.add("mdids", metadataId);
+						try {
+							// first we ask to get the last thumb etag
+							ClientResponse thumbsWebServiceResponse1 = thumbsWebServiceResource
+									.queryParams(thumbsQueryParams)
+									.accept(MediaType.APPLICATION_XML_TYPE)
+									.get(ClientResponse.class);
+
+							Document thumbXMLResponse = thumbsWebServiceResponse1
+									.getEntity(Document.class);
+							String thumbEtag = extractEtagFromThumbDocument(thumbXMLResponse);
+							MultivaluedMap<String, String> iconsQueryParams = new MultivaluedMapImpl();
+							iconsQueryParams.add("mdid", metadataId);
+							iconsQueryParams.add("auto", "true");
+							ClientResponse thumbsWebServiceResponse = thumbsWebServiceResource
+									.queryParams(iconsQueryParams)
+									.accept(MediaType.APPLICATION_XML_TYPE)
+									.header(HttpHeaders.IF_MATCH, thumbEtag)
+									.put(ClientResponse.class);
+							String thumbUri = "";
+							Document thumbsDocument;
+							if (thumbsWebServiceResponse.getStatus() != Status.OK
+									.getStatusCode()) {
+								String message = String
+										.format("The thumbs ws service response for  mdid %s was not ok with message %s ",
+												metadataId,
+												thumbsWebServiceResponse
+														.getEntity(String.class));
+								logger.error(message);
+
+							} else {
+								thumbsDocument = thumbsWebServiceResponse
+										.getEntity(Document.class);
+								thumbUri = extractThumbUriFromThumbRepresentation(thumbsDocument);
+								logger.info(String
+										.format("The thumbs ws service response for mdid %s was ok with uri %s ",
+												metadataId, thumbUri));
+							}
+							updateThumbUriInMetadatas(metadataId, thumbUri);
+							// nothing to do with the response
+						} catch (Exception e) {
+							logger.error("It seems impossible to delete the thumb attached to this resource "
+									+ metadataId);
+							e.printStackTrace();
 						}
 
 					}
@@ -901,9 +950,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 	private String extractEtagFromContentDocument(Document doc) {
 		NodeList entryElements = doc.getElementsByTagName("entry");
-		Element entryElement = null;
 		if (entryElements.getLength() > 0) {
-			entryElement = (Element) entryElements.item(0);
 			NodeList updatedElements = doc.getElementsByTagName("updated");
 			Element updatedElement = null;
 			if (updatedElements.getLength() > 0) {
@@ -1075,7 +1122,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		if (Response.Status.OK.getStatusCode() == status) {
 			// TODO
 			updateThumbUriInMetadatas(ResourcesKeySyntax.removeSSL(metadataId),
-					ifMatch, thumbUri);
+					thumbUri);
 			return Response.status(thumbsWebServiceResponse.getStatus())
 					.type(thumbsWebServiceResponse.getType())
 					.header("Access-Control-Allow-Origin", "*")
@@ -1179,15 +1226,15 @@ public class ResourceEditionAPI extends ApiscolApi {
 					.format("The thumbs ws service response for mdid %s was ok with uri %s ",
 							metadataId, thumbUri));
 		}
-		updateThumbUriInMetadatas(metadataId, ifMatch, thumbUri);
+		updateThumbUriInMetadatas(metadataId, thumbUri);
 		return Response.status(thumbsWebServiceResponse.getStatus())
 				.entity(thumbsDocument)
 				.type(thumbsWebServiceResponse.getType())
 				.header("Access-Control-Allow-Origin", "*").build();
 	}
 
-	private void updateThumbUriInMetadatas(String metadataId, Object ifMatch,
-			String thumbUri) throws UnknownMetadataException {
+	private void updateThumbUriInMetadatas(String metadataId, String thumbUri)
+			throws UnknownMetadataException {
 		// TODO move to sync agent
 		metadataId = removeWebServiceUri(metadataId);
 		ClientResponse metaGetResponse = metadataWebServiceResource
