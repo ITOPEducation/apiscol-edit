@@ -180,7 +180,6 @@ public class SyncAgent implements Runnable {
 				.header(HttpHeaders.IF_MATCH, metaEtag)
 				.type(MediaType.APPLICATION_FORM_URLENCODED)
 				.put(ClientResponse.class, resourcesMdidsQueryParams);
-		System.out.println(metaWebServiceResponse.getEntity(String.class));
 
 	}
 

@@ -771,8 +771,9 @@ public class ResourceEditionAPI extends ApiscolApi {
 								logger.info(String
 										.format("The thumbs ws service response for mdid %s was ok with uri %s ",
 												metadataId, thumbUri));
+								updateThumbUriInMetadatas(metadataId, thumbUri);
 							}
-							updateThumbUriInMetadatas(metadataId, thumbUri);
+
 							// nothing to do with the response
 						} catch (Exception e) {
 							logger.error("It seems impossible to delete the thumb attached to this resource "
@@ -799,6 +800,17 @@ public class ResourceEditionAPI extends ApiscolApi {
 	private String extractContentUrlFromMetadataResponse(Document response) {
 		String contentUrl = "";
 		Boolean goOn = true;
+		NodeList contentElements = response.getElementsByTagName("content");
+		if (goOn && contentElements.getLength() > 0) {
+			Element contentElement = (Element) contentElements.item(0);
+			if (contentElement.getAttribute("type").equals("text/html")) {
+				String src = contentElement.getAttribute("src");
+				if (!StringUtils.isEmpty(src)) {
+					return src;
+				}
+
+			}
+		}
 		NodeList entryElements = response.getElementsByTagName("entry");
 		Element entryElement = null;
 		if (goOn && entryElements.getLength() > 0) {
@@ -816,7 +828,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 				if (linkElement.getAttribute("rel").equals("describes")
 						&& linkElement.getAttribute("type").equals("text/html")) {
 					goOn = true;
-
 					break;
 				}
 
