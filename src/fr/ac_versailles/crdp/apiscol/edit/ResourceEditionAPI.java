@@ -34,6 +34,7 @@ import javax.ws.rs.core.UriInfo;
 import javax.xml.parsers.DocumentBuilder;
 
 import org.apache.commons.lang.StringUtils;
+import org.joda.time.DateTime;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -619,7 +620,8 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@Context HttpServletRequest request,
 			@FormDataParam("file") InputStream uploadedInputStream,
 			@FormDataParam("file") FormDataContentDisposition fileDetail,
-			@DefaultValue("false") @FormDataParam(value = "url_autodetect") final boolean urlAutoDetect)
+			@DefaultValue("false") @FormDataParam(value = "url_autodetect") final boolean urlAutoDetect,
+			@DefaultValue("false") @FormDataParam(value = "thumb_autochoice") final boolean thumbAutochoice)
 			throws ContentServiceFailureException,
 			UnknownMetadataRepositoryException, UnknownMetadataException {
 		if (!syncServiceInitialized)
@@ -700,19 +702,29 @@ public class ResourceEditionAPI extends ApiscolApi {
 						IEntitiesRepresentationBuilder rb = EntitiesRepresentationBuilderFactory
 								.getRepresentationBuilder(requestedFormat,
 										context);
-						Document notReturnedEntity = (Document) rb
-								.getUrlParsingRespresentation(
-										urlParsingId,
-										uriInfo,
-										urlParsingRegistry,
-										contentWebServiceResource.path(
-												"resource").getURI());
-						Node notReturnedEntityRoot = notReturnedEntity
-								.getFirstChild();
-						Node movedNode = response.importNode(
-								notReturnedEntityRoot, true);
-						// replace content url in metadata document
-						response.getDocumentElement().appendChild(movedNode);
+						// if thub auto choice is set to false, the process is
+						// async
+						// add information about url parsing thread in the
+						// answer
+						if (!thumbAutochoice) {
+							Document notReturnedEntity = (Document) rb
+									.getUrlParsingRespresentation(
+											urlParsingId,
+											uriInfo,
+											urlParsingRegistry,
+											contentWebServiceResource.path(
+													"resource").getURI());
+							Node notReturnedEntityRoot = notReturnedEntity
+									.getFirstChild();
+
+							Node movedNode = response.importNode(
+									notReturnedEntityRoot, true);
+
+							// replace content url in metadata document
+							response.getDocumentElement()
+									.appendChild(movedNode);
+						}
+
 						String contentXMLRepresentationUrl = extractUriFromReport(
 								contentXmlResponse, "application/atom+xml");
 						String contentHTMLRepresentationUrl = extractUriFromReport(
@@ -733,52 +745,47 @@ public class ResourceEditionAPI extends ApiscolApi {
 											contentHTMLRepresentationUrl);
 							}
 						}
-						MultivaluedMap<String, String> thumbsQueryParams = new MultivaluedMapImpl();
-						thumbsQueryParams.add("mdids", metadataId);
-						try {
-							// first we ask to get the last thumb etag
-							ClientResponse thumbsWebServiceResponse1 = thumbsWebServiceResource
-									.queryParams(thumbsQueryParams)
-									.accept(MediaType.APPLICATION_XML_TYPE)
-									.get(ClientResponse.class);
+						if (thumbAutochoice) {
+							try {
+								Thread urlParsingThread = urlParsingRegistry
+										.getThread(urlParsingId);
+								long time = System.currentTimeMillis();
+								urlParsingThread.join(6000);
+								MultivaluedMap<String, String> iconsQueryParams = new MultivaluedMapImpl();
+								iconsQueryParams.add("mdid", metadataId);
+								iconsQueryParams.add("auto", "true");
+								ClientResponse thumbsWebServiceResponse = thumbsWebServiceResource
+										.queryParams(iconsQueryParams)
+										.accept(MediaType.APPLICATION_XML_TYPE)
+										.put(ClientResponse.class);
+								String thumbUri = "";
+								Document thumbsDocument;
+								if (thumbsWebServiceResponse.getStatus() != Status.OK
+										.getStatusCode()) {
+									String message = String
+											.format("The thumbs ws service response for  mdid %s was not ok with message %s ",
+													metadataId,
+													thumbsWebServiceResponse
+															.getEntity(String.class));
+									logger.error(message);
 
-							Document thumbXMLResponse = thumbsWebServiceResponse1
-									.getEntity(Document.class);
-							String thumbEtag = extractEtagFromThumbDocument(thumbXMLResponse);
-							MultivaluedMap<String, String> iconsQueryParams = new MultivaluedMapImpl();
-							iconsQueryParams.add("mdid", metadataId);
-							iconsQueryParams.add("auto", "true");
-							ClientResponse thumbsWebServiceResponse = thumbsWebServiceResource
-									.queryParams(iconsQueryParams)
-									.accept(MediaType.APPLICATION_XML_TYPE)
-									.header(HttpHeaders.IF_MATCH, thumbEtag)
-									.put(ClientResponse.class);
-							String thumbUri = "";
-							Document thumbsDocument;
-							if (thumbsWebServiceResponse.getStatus() != Status.OK
-									.getStatusCode()) {
-								String message = String
-										.format("The thumbs ws service response for  mdid %s was not ok with message %s ",
-												metadataId,
-												thumbsWebServiceResponse
-														.getEntity(String.class));
-								logger.error(message);
+								} else {
+									thumbsDocument = thumbsWebServiceResponse
+											.getEntity(Document.class);
+									thumbUri = extractThumbUriFromThumbRepresentation(thumbsDocument);
+									logger.info(String
+											.format("The thumbs ws service response for mdid %s was ok with uri %s ",
+													metadataId, thumbUri));
+									updateThumbUriInMetadatas(metadataId,
+											thumbUri);
+								}
 
-							} else {
-								thumbsDocument = thumbsWebServiceResponse
-										.getEntity(Document.class);
-								thumbUri = extractThumbUriFromThumbRepresentation(thumbsDocument);
-								logger.info(String
-										.format("The thumbs ws service response for mdid %s was ok with uri %s ",
-												metadataId, thumbUri));
-								updateThumbUriInMetadatas(metadataId, thumbUri);
+								// nothing to do with the response
+							} catch (Exception e) {
+								logger.error("It seems impossible to delete the thumb attached to this resource "
+										+ metadataId);
+								e.printStackTrace();
 							}
-
-							// nothing to do with the response
-						} catch (Exception e) {
-							logger.error("It seems impossible to delete the thumb attached to this resource "
-									+ metadataId);
-							e.printStackTrace();
 						}
 
 					}

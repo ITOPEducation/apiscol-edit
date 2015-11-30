@@ -83,4 +83,10 @@ public class UrlParsingRegistry {
 		return resourcesIds.get(urlParsingId);
 	}
 
+	public Thread getThread(Integer urlParsingId) {
+		if (urlParsings.containsKey(urlParsingId))
+			return urlParsings.get(urlParsingId);
+		return null;
+	}
+
 }
