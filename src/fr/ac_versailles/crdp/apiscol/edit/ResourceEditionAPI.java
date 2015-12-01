@@ -749,7 +749,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 							try {
 								Thread urlParsingThread = urlParsingRegistry
 										.getThread(urlParsingId);
-								long time = System.currentTimeMillis();
 								urlParsingThread.join(6000);
 								MultivaluedMap<String, String> iconsQueryParams = new MultivaluedMapImpl();
 								iconsQueryParams.add("mdid", metadataId);
