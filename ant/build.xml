@@ -56,6 +56,7 @@
 			</classpath>
 		</javac>
 		<copyfile dest="${build.dir}/log4j.properties" src="${src.dir}/log4j.properties" />
+		<copyfile dest="${build.dir}/log4j.eclipse.properties" src="${src.dir}/log4j.eclipse.properties" />
 	</target>
 
 </project>
