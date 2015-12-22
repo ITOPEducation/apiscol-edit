@@ -23,6 +23,7 @@ import com.sun.jersey.multipart.FormDataMultiPart;
 
 import fr.ac_versailles.crdp.apiscol.edit.ResourceEditionAPI;
 import fr.ac_versailles.crdp.apiscol.edit.sync.SyncService;
+import fr.ac_versailles.crdp.apiscol.restClient.LanWebResource;
 import fr.ac_versailles.crdp.apiscol.utils.XMLUtils;
 
 public class TransferRegistry {
@@ -60,10 +61,10 @@ public class TransferRegistry {
 	private static Map<Integer, TransferTypes> transferTypes = new ConcurrentHashMap<Integer, TransferTypes>();
 	private final String fileRepoPath;
 	private final String temporaryFilesPrefix;
-	private final WebResource contentWebServiceResource;
+	private final LanWebResource contentWebServiceResource;
 
 	public TransferRegistry(String fileRepoPath, String temporaryFilesPrefix,
-			WebResource contentWebServiceResource) {
+			LanWebResource contentWebServiceResource) {
 		this.fileRepoPath = fileRepoPath;
 		this.temporaryFilesPrefix = temporaryFilesPrefix;
 		this.contentWebServiceResource = contentWebServiceResource;
@@ -143,7 +144,6 @@ public class TransferRegistry {
 			try {
 				form.close();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}

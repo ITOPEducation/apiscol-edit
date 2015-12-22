@@ -7,6 +7,7 @@ import com.sun.jersey.api.client.WebResource;
 
 import fr.ac_versailles.crdp.apiscol.edit.fileHandling.UrlParsingStates;
 import fr.ac_versailles.crdp.apiscol.edit.sync.SyncService;
+import fr.ac_versailles.crdp.apiscol.restClient.LanWebResource;
 
 public class UrlParsingRegistry {
 
@@ -18,9 +19,9 @@ public class UrlParsingRegistry {
 	private static Map<Integer, UrlParsingStates> parsingStates = new HashMap<Integer, UrlParsingStates>();
 	private static Map<Integer, String> messages = new HashMap<Integer, String>();
 	private static Map<Integer, String> resourcesIds = new HashMap<Integer, String>();
-	private final WebResource contentWebServiceResource;
+	private final LanWebResource contentWebServiceResource;
 
-	public UrlParsingRegistry(WebResource contentWebServiceResource) {
+	public UrlParsingRegistry(LanWebResource contentWebServiceResource) {
 		this.contentWebServiceResource = contentWebServiceResource;
 		counter = 0;
 

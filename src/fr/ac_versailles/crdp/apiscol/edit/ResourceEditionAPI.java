@@ -29,12 +29,9 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
-import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
-import javax.xml.parsers.DocumentBuilder;
 
 import org.apache.commons.lang.StringUtils;
-import org.joda.time.DateTime;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -44,7 +41,6 @@ import com.sun.jersey.api.client.Client;
 import com.sun.jersey.api.client.ClientHandlerException;
 import com.sun.jersey.api.client.ClientResponse;
 import com.sun.jersey.api.client.UniformInterfaceException;
-import com.sun.jersey.api.client.WebResource;
 import com.sun.jersey.core.header.FormDataContentDisposition;
 import com.sun.jersey.core.util.MultivaluedMapImpl;
 import com.sun.jersey.multipart.FormDataMultiPart;
@@ -61,8 +57,8 @@ import fr.ac_versailles.crdp.apiscol.edit.sync.SyncService.SYNC_MODES;
 import fr.ac_versailles.crdp.apiscol.edit.urlHandling.UrlParsingRegistry;
 import fr.ac_versailles.crdp.apiscol.representations.EntitiesRepresentationBuilderFactory;
 import fr.ac_versailles.crdp.apiscol.representations.IEntitiesRepresentationBuilder;
+import fr.ac_versailles.crdp.apiscol.restClient.LanWebResource;
 import fr.ac_versailles.crdp.apiscol.utils.FileUtils;
-import fr.ac_versailles.crdp.apiscol.utils.XMLUtils;
 
 @Path("/")
 public class ResourceEditionAPI extends ApiscolApi {
@@ -76,9 +72,9 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 	private static TransferRegistry transferRegistry;
 
-	private static WebResource contentWebServiceResource;
-	private static WebResource thumbsWebServiceResource;
-	private static WebResource metadataWebServiceResource;
+	private static LanWebResource contentWebServiceResource;
+	private static LanWebResource thumbsWebServiceResource;
+	private static LanWebResource metadataWebServiceResource;
 
 	private static boolean initialized;
 	private static boolean syncServiceInitialized;
@@ -100,36 +96,41 @@ public class ResourceEditionAPI extends ApiscolApi {
 		fileRepoPath = getProperty(ParametersKeys.fileRepoPath, context);
 		temporaryFilesPrefix = getProperty(ParametersKeys.temporaryFilesPrefix,
 				context);
-		URI contentWebserviceUrl = null;
-		URI metadataWebserviceUrl = null;
-		URI thumbsWebserviceUrl = null;
+		URI contentWebserviceLanUrl = null;
+		URI contentWebserviceWanUrl = null;
+		URI metadataWebserviceLanUrl = null;
+		URI metadataWebserviceWanUrl = null;
+		URI thumbsWebserviceLanUrl = null;
+		URI thumbsWebserviceWanUrl = null;
 		try {
-			contentWebserviceUrl = new URI(getProperty(
-					ParametersKeys.contentWebserviceUrl, context));
-		} catch (URISyntaxException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		try {
-			metadataWebserviceUrl = new URI(getProperty(
-					ParametersKeys.metadataWebserviceUrl, context));
-		} catch (URISyntaxException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		try {
-			thumbsWebserviceUrl = new URI(getProperty(
-					ParametersKeys.thumbsWebserviceUrl, context));
-		} catch (URISyntaxException e) {
-			e.printStackTrace();
-		}
-		contentWebServiceResource = client.resource(UriBuilder.fromUri(
-				contentWebserviceUrl).build());
+			contentWebserviceLanUrl = new URI(getProperty(
+					ParametersKeys.contentWebserviceLanUrl, context));
+			contentWebserviceWanUrl = new URI(getProperty(
+					ParametersKeys.contentWebserviceWanUrl, context));
 
-		metadataWebServiceResource = client.resource(UriBuilder.fromUri(
-				metadataWebserviceUrl).build());
-		thumbsWebServiceResource = client.resource(UriBuilder.fromUri(
-				thumbsWebserviceUrl).build());
+			metadataWebserviceLanUrl = new URI(getProperty(
+					ParametersKeys.metadataWebserviceLanUrl, context));
+			metadataWebserviceWanUrl = new URI(getProperty(
+					ParametersKeys.metadataWebserviceWanUrl, context));
+
+			thumbsWebserviceLanUrl = new URI(getProperty(
+					ParametersKeys.thumbsWebserviceLanUrl, context));
+			thumbsWebserviceWanUrl = new URI(getProperty(
+					ParametersKeys.thumbsWebserviceWanUrl, context));
+		} catch (URISyntaxException e) {
+			e.printStackTrace();
+		}
+		contentWebServiceResource = new LanWebResource(
+				client.resource(contentWebserviceLanUrl));
+		contentWebServiceResource.setWanUrl(contentWebserviceWanUrl);
+
+		metadataWebServiceResource = new LanWebResource(
+				client.resource(metadataWebserviceLanUrl));
+		metadataWebServiceResource.setWanUrl(metadataWebserviceWanUrl);
+
+		thumbsWebServiceResource = new LanWebResource(
+				client.resource(thumbsWebserviceLanUrl));
+		thumbsWebServiceResource.setWanUrl(thumbsWebserviceWanUrl);
 
 		transferRegistry = new TransferRegistry(fileRepoPath,
 				temporaryFilesPrefix, contentWebServiceResource);
@@ -149,7 +150,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormParam(value = "type") final String scormType)
 			throws ContentServiceFailureException {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		ClientResponse cr = createEmptyResource(metadataId, scormType);
 		Document response = null;
 		if (Response.Status.CREATED.getStatusCode() == cr.getStatus()) {
@@ -185,7 +186,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		MultivaluedMap<String, String> postParams = new MultivaluedMapImpl();
 		postParams.add("mdid", metadataId);
 		postParams.add("type", scormType);
-		postParams.add("edit_uri", uriInfo.getBaseUri().toString());
+		postParams.add("edit_uri", getExternalUri().toString());
 		ClientResponse cr = contentWebServiceResource.path("resource")
 				.accept(MediaType.APPLICATION_XML_TYPE)
 				// send what you want as if match
@@ -206,7 +207,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@DefaultValue("false") @FormParam(value = "archive") final boolean updateArchive,
 			@DefaultValue("false") @FormParam(value = "sync-tech-infos") final boolean updateTechnicalInfos) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		if (StringUtils.isBlank(resourceId))
 			return Response.status(Response.Status.BAD_REQUEST)
 					.header("Access-Control-Allow-Origin", "*")
@@ -214,13 +215,12 @@ public class ResourceEditionAPI extends ApiscolApi {
 		if (updateTechnicalInfos) {
 			SyncAgent syncAgent = new SyncAgent(SYNC_MODES.FROM_RESOURCE_ID,
 					contentWebServiceResource, metadataWebServiceResource,
-					thumbsWebServiceResource, resourceId, uriInfo.getBaseUri());
+					thumbsWebServiceResource, resourceId, getExternalUri());
 			Thread thread = new Thread(syncAgent);
 			thread.start();
 			try {
 				thread.join();
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			return Response.status(Status.OK)
@@ -230,7 +230,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		}
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
 		MultivaluedMap<String, String> params = new MultivaluedMapImpl();
-		params.add("edit_uri", uriInfo.getBaseUri().toString());
+		params.add("edit_uri", getExternalUri().toString());
 		params.add("preview", updatePreview ? "true" : "false");
 		params.add("index", updateIndex ? "true" : "false");
 		params.add("archive", updateArchive ? "true" : "false");
@@ -257,7 +257,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@PathParam(value = "mdid") final String metadataId,
 			@DefaultValue("false") @FormParam(value = "index") final boolean updateIndex) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		String entity;
 		if (StringUtils.isBlank(metadataId))
 			return Response.status(Response.Status.BAD_REQUEST)
@@ -266,7 +266,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		if (updateIndex) {
 			String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
 			MultivaluedMap<String, String> params = new MultivaluedMapImpl();
-			params.add("edit_uri", uriInfo.getBaseUri().toString());
+			params.add("edit_uri", getExternalUri().toString());
 			params.add("index", updateIndex ? "true" : "false");
 			ClientResponse response = metadataWebServiceResource
 					.path(metadataId).path("refresh")
@@ -297,7 +297,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormParam(value = "type") final String scormType,
 			@DefaultValue("true") @FormParam(value = "update") final boolean updateArchive) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		if (StringUtils.isBlank(resourceId))
 			return Response.status(Response.Status.BAD_REQUEST)
 					.header("Access-Control-Allow-Origin", "*")
@@ -312,7 +312,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			params.add("url", url);
 		if (StringUtils.isNotBlank(mainFileName))
 			params.add("main_filename", mainFileName);
-		params.add("edit_uri", uriInfo.getBaseUri().toString());
+		params.add("edit_uri", getExternalUri().toString());
 		params.add("update_preview", updateArchive ? "true" : "false");
 		ClientResponse response = contentWebServiceResource.path("resource")
 				.path(resourceId).accept(MediaType.APPLICATION_XML)
@@ -327,8 +327,8 @@ public class ResourceEditionAPI extends ApiscolApi {
 	}
 
 	private String removeWebServiceUri(String metadataId) {
-		return metadataId
-				.replace(metadataWebServiceResource.getURI() + "/", "");
+		return metadataId.replace(metadataWebServiceResource.getWanUrl() + "/",
+				"");
 	}
 
 	private String extractThumbUriFromThumbRepresentation(Document thumbs) {
@@ -374,7 +374,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormDataParam("file") InputStream uploadedInputStream,
 			@FormDataParam("file") FormDataContentDisposition fileDetail) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		if (ResourcesKeySyntax.isUrn(resourceId))
 			resourceId = ResourcesKeySyntax
 					.extractResourceIdFromUrn(resourceId);
@@ -441,7 +441,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@DefaultValue("true") @QueryParam(value = "update_archive") final Boolean updateArchive,
 			@FormParam(value = "url") final String url) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		if (StringUtils.isBlank(resourceId)) {
 			String message = "If you want to parse the url "
 					+ url
@@ -488,7 +488,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@QueryParam(value = "format") final String format)
 			throws IOException {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		String requestedFormat = guessRequestedFormat(request, format);
 		IEntitiesRepresentationBuilder rb = EntitiesRepresentationBuilderFactory
 				.getRepresentationBuilder(requestedFormat, context);
@@ -508,7 +508,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@PathParam(value = "urlparsingid") final Integer urlParsingId)
 			throws IOException {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		String requestedFormat = request.getContentType();
 		IEntitiesRepresentationBuilder rb = EntitiesRepresentationBuilderFactory
 				.getRepresentationBuilder(requestedFormat, context);
@@ -530,7 +530,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@QueryParam(value = "fname") final String fileName,
 			@DefaultValue("true") @QueryParam(value = "update_archive") final boolean updateArchive) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		if (StringUtils.isBlank(fileName))
 			return deleteResource(request, resourceId);
 		else
@@ -545,7 +545,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		MultivaluedMap<String, String> queryParams = new MultivaluedMapImpl();
 		queryParams.add("update_archive", updateArchive ? "true" : "false");
 		queryParams.add("fname", fileName);
-		queryParams.add("edit_uri", uriInfo.getBaseUri().toString());
+		queryParams.add("edit_uri", getExternalUri().toString());
 		try {
 			response = contentWebServiceResource.path("resource")
 					.path(resourceId).queryParams(queryParams)
@@ -553,10 +553,10 @@ public class ResourceEditionAPI extends ApiscolApi {
 					.header(HttpHeaders.IF_MATCH, ifMatch)
 					.delete(ClientResponse.class);
 		} catch (UniformInterfaceException e) {
-			// TODO Auto-generated catch block
+
 			e.printStackTrace();
 		} catch (ClientHandlerException e) {
-			// TODO Auto-generated catch block
+
 			e.printStackTrace();
 		}
 		String etag = response.getHeaders().getFirst(HttpHeaders.ETAG);
@@ -625,7 +625,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			throws ContentServiceFailureException,
 			UnknownMetadataRepositoryException, UnknownMetadataException {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		File file = writeToTempFile(uploadedInputStream);
 		try {
 
@@ -640,7 +640,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		try {
 			form = new FormDataMultiPart().field("file", file,
 					MediaType.MULTIPART_FORM_DATA_TYPE).field("edit_uri",
-					uriInfo.getBaseUri().toString());
+					getExternalUri().toString());
 
 			cr = metadataWebServiceResource.accept(MediaType.APPLICATION_XML)
 					.type(MediaType.MULTIPART_FORM_DATA)
@@ -859,7 +859,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormDataParam("file") FormDataContentDisposition fileDetail,
 			@PathParam(value = "mdid") final String metadataId) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
 		File file = writeToTempFile(uploadedInputStream);
 		try {
@@ -874,7 +874,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		try {
 			form = new FormDataMultiPart().field("file", file,
 					MediaType.MULTIPART_FORM_DATA_TYPE).field("edit_uri",
-					uriInfo.getBaseUri().toString());
+					getExternalUri().toString());
 			cr = metadataWebServiceResource.path(metadataId)
 					.accept(MediaType.APPLICATION_XML)
 					.type(MediaType.MULTIPART_FORM_DATA)
@@ -885,7 +885,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			try {
 				form.close();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
+
 				e.printStackTrace();
 			}
 		}
@@ -911,7 +911,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 	public Response deleteMetadata(@Context HttpServletRequest request,
 			@PathParam(value = "mdid") final String metadataId) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
 		ClientResponse response = metadataWebServiceResource.path(metadataId)
 				.accept(MediaType.APPLICATION_ATOM_XML)
@@ -960,7 +960,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 	}
 
 	private String extractEtagFromThumbDocument(Document doc) {
-		// TODO better catch excetions
+		// TODO better catch of exceptions
 		return ((Element) doc.getDocumentElement()
 				.getElementsByTagName("thumb").item(0)).getAttribute("version");
 	}
@@ -986,9 +986,9 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@QueryParam(value = "mdid") final String metadataUri)
 			throws UnknownMetadataException {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
-		if (!metadataUri.startsWith(metadataWebServiceResource.getURI()
+		if (!metadataUri.startsWith(metadataWebServiceResource.getWanUrl()
 				.toString()))
 			throw new UnknownMetadataException(
 					String.format(
@@ -996,7 +996,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 							metadataUri));
 		// TODO mapper UnknownMetadataException
 		String metadataId = metadataUri.replace(metadataWebServiceResource
-				.getURI().toString() + "/", "");
+				.getWanUrl().toString() + "/", "");
 		// TODO accepter aussi des uuid
 		ClientResponse response = metadataWebServiceResource.path(metadataId)
 				.accept(MediaType.APPLICATION_ATOM_XML)
@@ -1046,8 +1046,8 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@PathParam(value = "service") final String serviceName,
 			@PathParam(value = "operation") final String requestedOperation) {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
-		WebResource webServiceResource = null;
+			SyncService.notifyUriInfo(getExternalUri());
+		LanWebResource webServiceResource = null;
 		Boolean requestedOperationExists = false;
 		if (serviceName.equals("content")) {
 			webServiceResource = contentWebServiceResource;
@@ -1110,7 +1110,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormDataParam("mdid") String metadataId)
 			throws UnknownMetadataException {
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		File image = writeToTempFile(uploadedInputStream);
 		try {
 			uploadedInputStream.close();
@@ -1119,25 +1119,33 @@ public class ResourceEditionAPI extends ApiscolApi {
 					.format("A probleme was encountered while closing the input streamm for image (custom thumb) %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
 		}
-		FormDataMultiPart form = new FormDataMultiPart()
-				.field("image", image, MediaType.MULTIPART_FORM_DATA_TYPE)
-				.field("mdid", ResourcesKeySyntax.removeSSL(metadataId))
-				.field("fname", fileDetail.getFileName());
+		Document thumbsDocument = null;
+		ClientResponse thumbsWebServiceResponse = null;
+		FormDataMultiPart form = null;
+
+		form = new FormDataMultiPart();
+		form.field("image", image, MediaType.MULTIPART_FORM_DATA_TYPE);
+		form.field("mdid", ResourcesKeySyntax.removeSSL(metadataId));
+		form.field("fname", fileDetail.getFileName());
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
-		ClientResponse thumbsWebServiceResponse = thumbsWebServiceResource
+		thumbsWebServiceResponse = thumbsWebServiceResource
 				.accept(MediaType.APPLICATION_XML)
 				.type(MediaType.MULTIPART_FORM_DATA)
 				.header(HttpHeaders.IF_MATCH, ifMatch).entity(form)
 				.post(ClientResponse.class);
-		Document thumbsDocument = thumbsWebServiceResponse
-				.getEntity(Document.class);
+
+		thumbsDocument = thumbsWebServiceResponse.getEntity(Document.class);
+		try {
+			form.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		String thumbUri = extractThumbUriFromThumbRepresentation(thumbsDocument);
 		logger.info(String
 				.format("The thumbs ws service response for mdid %s was ok with uri %s ",
 						metadataId, thumbUri));
 		int status = thumbsWebServiceResponse.getStatus();
 		if (Response.Status.OK.getStatusCode() == status) {
-			// TODO
 			updateThumbUriInMetadatas(ResourcesKeySyntax.removeSSL(metadataId),
 					thumbUri);
 			return Response.status(thumbsWebServiceResponse.getStatus())
@@ -1200,18 +1208,18 @@ public class ResourceEditionAPI extends ApiscolApi {
 								+ imageUrl)
 						.header("Access-Control-Allow-Origin", "*").build();
 		if (!syncServiceInitialized)
-			SyncService.notifyUriInfo(uriInfo.getBaseUri());
+			SyncService.notifyUriInfo(getExternalUri());
 		if (!status.equals("default"))
 			return Response
 					.status(Status.BAD_REQUEST)
 					.entity("This thumb status is not accepted at this time "
 							+ status)
 					.header("Access-Control-Allow-Origin", "*").build();
-		if (!metadataId.startsWith(metadataWebServiceResource.getURI()
+		if (!metadataId.startsWith(metadataWebServiceResource.getWanUrl()
 				.toString()))
 			throw new UnknownMetadataRepositoryException(
 					"This apiscol instance does handle iconification only for this metadata repository "
-							+ metadataWebServiceResource.getURI().toString()
+							+ metadataWebServiceResource.getWanUrl().toString()
 							+ "not for " + metadataId);
 
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
@@ -1305,7 +1313,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			params.add("mdid", metadataId);
 		if (StringUtils.isNotBlank(hierarchy))
 			params.add("hierarchy", hierarchy);
-		params.add("edit_uri", uriInfo.getBaseUri().toString());
+		params.add("edit_uri", getExternalUri().toString());
 
 		ClientResponse response = metadataWebServiceResource.path(metadataId)
 				.path("hierarchy").accept(MediaType.APPLICATION_XML)

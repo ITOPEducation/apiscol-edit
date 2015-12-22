@@ -22,25 +22,25 @@ import com.sun.jersey.core.util.MultivaluedMapImpl;
 
 import fr.ac_versailles.crdp.apiscol.UsedNamespaces;
 import fr.ac_versailles.crdp.apiscol.edit.sync.SyncService.SYNC_MODES;
+import fr.ac_versailles.crdp.apiscol.restClient.LanWebResource;
 import fr.ac_versailles.crdp.apiscol.utils.LogUtility;
 import fr.ac_versailles.crdp.apiscol.utils.XMLUtils;
 
 public class SyncAgent implements Runnable {
 
 	private SYNC_MODES mode;
-	private WebResource contentWebServiceResource;
-	private WebResource metadataWebServiceResource;
-	private WebResource thumbsWebServiceResource;
+	private LanWebResource contentWebServiceResource;
+	private LanWebResource metadataWebServiceResource;
+	private LanWebResource thumbsWebServiceResource;
 	private Logger logger;
 	private String entityUrnOrId;
 	private URI editUri;
-	private Document manifestResponse;
 	private Document contentTechInfos;
 
 	public SyncAgent(SyncService.SYNC_MODES mode,
-			WebResource contentWebServiceResource,
-			WebResource metadataWebServiceResource,
-			WebResource thumbsWebServiceResource, String entityUrnOrId,
+			LanWebResource contentWebServiceResource,
+			LanWebResource metadataWebServiceResource,
+			LanWebResource thumbsWebServiceResource, String entityUrnOrId,
 			URI baseUri) {
 		this.mode = mode;
 		this.contentWebServiceResource = contentWebServiceResource;
@@ -51,14 +51,11 @@ public class SyncAgent implements Runnable {
 		createLogger();
 	}
 
-	public SyncAgent(SYNC_MODES mode, WebResource contentWebServiceResource,
-			WebResource metadataWebServiceResource, Document manifestResponse,
-			URI baseUri) {
+	public SyncAgent(SYNC_MODES mode, LanWebResource contentWebServiceResource,
+			LanWebResource metadataWebServiceResource, URI baseUri) {
 		this.mode = mode;
 		this.contentWebServiceResource = contentWebServiceResource;
-		// TODO Auto-generated constructor stub
 		this.metadataWebServiceResource = metadataWebServiceResource;
-		this.manifestResponse = manifestResponse;
 		createLogger();
 	}
 
@@ -75,138 +72,7 @@ public class SyncAgent implements Runnable {
 			forwardContentInformationToMetadata();
 		else if (mode == SYNC_MODES.FROM_METADATA_ID)
 			updateMetadataWithContentInformation();
-		else if (mode == SYNC_MODES.FROM_MANIFEST)
-			updateMetadataWithManifestInformation();
 
-	}
-
-	private void updateMetadataWithManifestInformation() {
-		// Rest identifier of pack metadata
-		String packMetadataUri = extractMetadataUriFromAtom(manifestResponse);
-		String packUri = extractUriFromAtom(manifestResponse);
-		// short identifier of pack metadata (only the uuid)
-		String packMetadataId = packMetadataUri.replaceAll(
-				metadataWebServiceResource.getURI().toString() + "/", "");
-		NodeList resources;
-		if (manifestResponse == null
-				|| manifestResponse.getDocumentElement() == null
-				|| manifestResponse
-						.getDocumentElement()
-						.getElementsByTagNameNS(
-								UsedNamespaces.APISCOL.getUri(), "resource")
-						.getLength() == 0) {
-			// TODO do something
-			return;
-		}
-		// list all the resources in the response. Some of them are learning
-		// objects,
-		// other are activity descriptions
-		resources = manifestResponse.getDocumentElement()
-				.getElementsByTagNameNS(UsedNamespaces.APISCOL.getUri(),
-						"resource");
-		List<String> learningObjectsMetadataList = new ArrayList<String>();
-		for (int i = 0; i < resources.getLength(); i++) {
-			Element resource = (Element) resources.item(i);
-			String resourceUri = resource.getAttribute("href");
-			if (!resourceUri.startsWith(contentWebServiceResource.getURI()
-					.toString())) {
-				logger.error("The ressource with href "
-						+ resourceUri
-						+ " does not belong to this apiscol content instance : "
-						+ contentWebServiceResource.getURI().toString());
-				continue;
-			}
-			String resourceId = resourceUri.replace(contentWebServiceResource
-					.getURI().toString() + "/resource/", "");
-			ClientResponse contentWebServiceResponse = null;
-			// ask for the resource representation
-			try {
-				contentWebServiceResponse = contentWebServiceResource
-						.path("resource").path(resourceId)
-						.accept(MediaType.APPLICATION_XML_TYPE)
-						.get(ClientResponse.class);
-			} catch (Exception e) {
-				logger.warn("Impossible to get resource representation for resource "
-						+ resourceUri);
-				e.printStackTrace();
-			}
-			Document resourceRepresentation = contentWebServiceResponse
-					.getEntity(Document.class);
-			String metadataUri = extractMetadataUriFromAtom(resourceRepresentation);
-			// if it is a real metadata, it's a learning object, we will add it
-			// to the list
-			if (metadataUri.toString().startsWith(
-					metadataWebServiceResource.getURI().toString()))
-				learningObjectsMetadataList.add(metadataUri);
-			else {// it's an activity description. We will give him the pack
-					// metadata
-				if (!metadataUri.contains(packMetadataId)) {
-					String ifMatch = contentWebServiceResponse.getHeaders()
-							.getFirst(HttpHeaders.ETAG);
-					MultivaluedMap<String, String> params = new MultivaluedMapImpl();
-					params.add("mdid", packMetadataUri);
-					params.add("update", "false");
-					contentWebServiceResource.path("resource").path(resourceId)
-							.accept(MediaType.APPLICATION_XML)
-							.header(HttpHeaders.IF_MATCH, ifMatch)
-							.put(ClientResponse.class, params);
-					// TODO handle connection problems
-				}
-
-			}
-		}
-
-		String jsonMetadataList = new Gson()
-				.toJson(learningObjectsMetadataList);
-		ClientResponse metaGetResponse = metadataWebServiceResource
-				.path(packMetadataId).accept(MediaType.APPLICATION_XML)
-				.get(ClientResponse.class);
-
-		if (metaGetResponse.getStatus() != Status.OK.getStatusCode()) {
-			String metaRepresentation = metaGetResponse.getEntity(String.class);
-			logger.warn(String
-					.format("Error while trying to retrieve metadata %s for pack %s with message %s : abort",
-							packMetadataUri, entityUrnOrId, metaRepresentation));
-			return;
-		}
-		String metaEtag = metaGetResponse.getHeaders().getFirst(
-				HttpHeaders.ETAG);
-		MultivaluedMap<String, String> resourcesMdidsQueryParams = new MultivaluedMapImpl();
-		resourcesMdidsQueryParams.add("mdids", jsonMetadataList);
-		resourcesMdidsQueryParams.add("packid", packUri);
-		ClientResponse metaWebServiceResponse = metadataWebServiceResource
-				.path(packMetadataId).path("/parts")
-				.accept(MediaType.APPLICATION_XML_TYPE)
-				.header(HttpHeaders.IF_MATCH, metaEtag)
-				.type(MediaType.APPLICATION_FORM_URLENCODED)
-				.put(ClientResponse.class, resourcesMdidsQueryParams);
-
-	}
-
-	private String extractUriFromAtom(Document doc) {
-		Element root = doc.getDocumentElement();
-		NodeList links = root.getElementsByTagName("link");
-		Element link;
-		for (int i = 0; i < links.getLength(); i++) {
-			link = (Element) links.item(i);
-			if (link.getAttribute("rel").equals("self")
-					&& link.getAttribute("type").equals("text/html"))
-				return link.getAttribute("href");
-		}
-		return StringUtils.EMPTY;
-	}
-
-	private String extractMetadataUriFromAtom(Document doc) {
-		Element root = doc.getDocumentElement();
-		NodeList links = root.getElementsByTagName("link");
-		Element link;
-		for (int i = 0; i < links.getLength(); i++) {
-			link = (Element) links.item(i);
-			if (link.getAttribute("rel").equals("describedby")
-					&& link.getAttribute("type").equals("application/atom+xml"))
-				return link.getAttribute("href");
-		}
-		return StringUtils.EMPTY;
 	}
 
 	private void updateMetadataWithContentInformation() {
@@ -277,7 +143,7 @@ public class SyncAgent implements Runnable {
 		String format = extractTechnicalField("format", contentTechInfos);
 		String previewUri = extractTechnicalField("preview", contentTechInfos);
 
-		if (!metadataId.startsWith(metadataWebServiceResource.getURI()
+		if (!metadataId.startsWith(metadataWebServiceResource.getWanUrl()
 				.toString())) {
 			logger.warn(String
 					.format("The metadata id %s received for resource %s does not belong to this apiscol instance : abort",
@@ -395,8 +261,8 @@ public class SyncAgent implements Runnable {
 	}
 
 	private String removeWebServiceUri(String metadataId) {
-		return metadataId
-				.replace(metadataWebServiceResource.getURI() + "/", "");
+		return metadataId.replace(metadataWebServiceResource.getWanUrl() + "/",
+				"");
 	}
 
 	public Document getContentTechInfos() {

@@ -9,13 +9,14 @@ import org.w3c.dom.Document;
 
 import com.sun.jersey.api.client.WebResource;
 
+import fr.ac_versailles.crdp.apiscol.restClient.LanWebResource;
 import fr.ac_versailles.crdp.apiscol.utils.LogUtility;
 
 public class SyncService {
 
-	private static WebResource contentWebServiceResource;
-	private static WebResource metadataWebServiceResource;
-	private static WebResource thumbsWebServiceResource;
+	private static LanWebResource contentWebServiceResource;
+	private static LanWebResource metadataWebServiceResource;
+	private static LanWebResource thumbsWebServiceResource;
 	private static ExecutorService syncExecutor;
 	private static URI baseUri;
 
@@ -23,9 +24,9 @@ public class SyncService {
 		FROM_RESOURCE_ID, FROM_METADATA_ID, FROM_MANIFEST
 	}
 
-	public static void initialize(WebResource contentWebServiceResource,
-			WebResource metadataWebServiceResource,
-			WebResource thumbsWebServiceResource) {
+	public static void initialize(LanWebResource contentWebServiceResource,
+			LanWebResource metadataWebServiceResource,
+			LanWebResource thumbsWebServiceResource) {
 		SyncService.contentWebServiceResource = contentWebServiceResource;
 		SyncService.metadataWebServiceResource = metadataWebServiceResource;
 		SyncService.thumbsWebServiceResource = thumbsWebServiceResource;
@@ -51,14 +52,6 @@ public class SyncService {
 
 	public static void notifyUriInfo(URI baseUri) {
 		SyncService.baseUri = baseUri;
-	}
-
-	public static void updateMetadatas(Document manifestResponse) {
-		SyncAgent syncAgent = new SyncAgent(SYNC_MODES.FROM_MANIFEST,
-				contentWebServiceResource, metadataWebServiceResource,
-				manifestResponse, baseUri);
-		syncExecutor.execute(syncAgent);
-
 	}
 
 	public static void stopExecutors() {
