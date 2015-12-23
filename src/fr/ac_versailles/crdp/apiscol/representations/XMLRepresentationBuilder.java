@@ -3,6 +3,7 @@ package fr.ac_versailles.crdp.apiscol.representations;
 import java.net.URI;
 
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -25,7 +26,7 @@ public class XMLRepresentationBuilder extends AbstractRepresentationBuilder {
 
 	@Override
 	public Object getFileTransferRepresentation(Integer fileTransferIdentifier,
-			UriInfo uriInfo, TransferRegistry fileTransferRegistry,
+			URI baseUri, TransferRegistry fileTransferRegistry,
 			URI contentWebServiceUri) {
 		Document report = createXMLDocument();
 		Element rootElement = report.createElement("apiscol:status");
@@ -36,7 +37,7 @@ public class XMLRepresentationBuilder extends AbstractRepresentationBuilder {
 		Element linkElement = report.createElement("link");
 		linkElement.setAttribute(
 				"href",
-				getUrlForFileTransfer(uriInfo.getBaseUriBuilder(),
+				getUrlForFileTransfer(UriBuilder.fromUri(baseUri),
 						fileTransferIdentifier).toString());
 		linkElement.setAttribute("rel", "self");
 		linkElement.setAttribute("type", "application/atom+xml");
@@ -82,7 +83,7 @@ public class XMLRepresentationBuilder extends AbstractRepresentationBuilder {
 
 	@Override
 	public Object getUrlParsingRespresentation(Integer urlParsingId,
-			UriInfo uriInfo, UrlParsingRegistry urlParsingRegistry,
+			URI baseUri, UrlParsingRegistry urlParsingRegistry,
 			URI contentWebServiceUri) {
 		Document report = createXMLDocument();
 		Element rootElement = report.createElement("apiscol:status");
@@ -92,7 +93,7 @@ public class XMLRepresentationBuilder extends AbstractRepresentationBuilder {
 		stateElement.setTextContent(parsingState.toString());
 		Element linkElement = report.createElement("link");
 		linkElement.setAttribute("href",
-				getUrlForUrlParsing(uriInfo.getBaseUriBuilder(), urlParsingId)
+				getUrlForUrlParsing(UriBuilder.fromUri(baseUri), urlParsingId)
 						.toString());
 		linkElement.setAttribute("rel", "self");
 		linkElement.setAttribute("type", "application/atom+xml");

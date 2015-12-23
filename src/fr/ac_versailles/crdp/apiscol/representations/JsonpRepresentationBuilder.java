@@ -3,7 +3,6 @@ package fr.ac_versailles.crdp.apiscol.representations;
 import java.net.URI;
 
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
 
 import org.w3c.dom.Document;
 
@@ -16,13 +15,13 @@ public class JsonpRepresentationBuilder extends XMLRepresentationBuilder {
 
 	@Override
 	public Object getFileTransferRepresentation(Integer fileTransferIdentifier,
-			UriInfo uriInfo, TransferRegistry fileTransferRegistry,
+			URI baseUri, TransferRegistry fileTransferRegistry,
 			URI contentWebServiceUri) {
 		String string = XMLUtils.XMLToString((Document) super
-				.getFileTransferRepresentation(fileTransferIdentifier, uriInfo,
+				.getFileTransferRepresentation(fileTransferIdentifier, baseUri,
 						fileTransferRegistry, contentWebServiceUri));
 		return new StringBuilder().append("notice(\"")
-				.append(string.replaceAll("\"","\\\\\"")).append("\");")
+				.append(string.replaceAll("\"", "\\\\\"")).append("\");")
 				.toString();
 	}
 
@@ -33,13 +32,13 @@ public class JsonpRepresentationBuilder extends XMLRepresentationBuilder {
 
 	@Override
 	public Object getUrlParsingRespresentation(Integer urlParsingId,
-			UriInfo uriInfo, UrlParsingRegistry urlParsingRegistry,
+			URI baseUri, UrlParsingRegistry urlParsingRegistry,
 			URI contentWebServiceUri) {
 		return new StringBuilder()
 				.append("notice(\"")
 				.append(XMLUtils.XMLToString(
 						(Document) super.getUrlParsingRespresentation(
-								urlParsingId, uriInfo, urlParsingRegistry,
+								urlParsingId, baseUri, urlParsingRegistry,
 								contentWebServiceUri)).replaceAll("\"", "\\\""))
 				.append("\");").toString();
 	}

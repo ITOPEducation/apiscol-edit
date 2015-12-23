@@ -29,6 +29,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 
 import org.apache.commons.lang.StringUtils;
@@ -411,11 +412,14 @@ public class ResourceEditionAPI extends ApiscolApi {
 		String requestedFormat = request.getHeader(HttpHeaders.ACCEPT);
 		IEntitiesRepresentationBuilder rb = EntitiesRepresentationBuilderFactory
 				.getRepresentationBuilder(requestedFormat, context);
+		URI contentWebServiceResourceUri = UriBuilder
+				.fromUri(contentWebServiceResource.getWanUrl())
+				.path("resource").build();
 		return Response
 				.ok()
 				.entity(rb.getFileTransferRepresentation(fileTransferId,
-						uriInfo, transferRegistry, contentWebServiceResource
-								.path("resource").getURI()))
+						getExternalUri(), transferRegistry,
+						contentWebServiceResourceUri))
 				.header("Access-Control-Allow-Origin", "*")
 				.type(rb.getMediaType()).build();
 	}
@@ -470,11 +474,14 @@ public class ResourceEditionAPI extends ApiscolApi {
 		String requestedFormat = request.getContentType();
 		IEntitiesRepresentationBuilder rb = EntitiesRepresentationBuilderFactory
 				.getRepresentationBuilder(requestedFormat, context);
+		URI contentWebServiceResourceUri = UriBuilder
+				.fromUri(contentWebServiceResource.getWanUrl())
+				.path("resource").build();
 		return Response
 				.ok()
-				.entity(rb.getUrlParsingRespresentation(urlParsingId, uriInfo,
-						urlParsingRegistry,
-						contentWebServiceResource.path("resource").getURI()))
+				.entity(rb.getUrlParsingRespresentation(urlParsingId,
+						getExternalUri(), urlParsingRegistry,
+						contentWebServiceResourceUri))
 				.header("Access-Control-Allow-Origin", "*")
 				.type(rb.getMediaType()).build();
 	}
@@ -492,11 +499,14 @@ public class ResourceEditionAPI extends ApiscolApi {
 		String requestedFormat = guessRequestedFormat(request, format);
 		IEntitiesRepresentationBuilder rb = EntitiesRepresentationBuilderFactory
 				.getRepresentationBuilder(requestedFormat, context);
+		URI contentWebServiceResourceUri = UriBuilder
+				.fromUri(contentWebServiceResource.getWanUrl())
+				.path("resource").build();
 		return Response
 				.ok()
-				.entity(rb.getFileTransferRepresentation(transferId, uriInfo,
-						transferRegistry,
-						contentWebServiceResource.path("resource").getURI()))
+				.entity(rb.getFileTransferRepresentation(transferId,
+						getExternalUri(), transferRegistry,
+						contentWebServiceResourceUri))
 				.header("Access-Control-Allow-Origin", "*")
 				.type(rb.getMediaType()).build();
 	}
@@ -512,11 +522,14 @@ public class ResourceEditionAPI extends ApiscolApi {
 		String requestedFormat = request.getContentType();
 		IEntitiesRepresentationBuilder rb = EntitiesRepresentationBuilderFactory
 				.getRepresentationBuilder(requestedFormat, context);
+		URI contentWebServiceResourceUri = UriBuilder
+				.fromUri(contentWebServiceResource.getWanUrl())
+				.path("resource").build();
 		return Response
 				.ok()
-				.entity(rb.getUrlParsingRespresentation(urlParsingId, uriInfo,
-						urlParsingRegistry,
-						contentWebServiceResource.path("resource").getURI()))
+				.entity(rb.getUrlParsingRespresentation(urlParsingId,
+						getExternalUri(), urlParsingRegistry,
+						contentWebServiceResourceUri))
 				.header("Access-Control-Allow-Origin", "*")
 				.type(rb.getMediaType()).build();
 	}
@@ -707,13 +720,15 @@ public class ResourceEditionAPI extends ApiscolApi {
 						// add information about url parsing thread in the
 						// answer
 						if (!thumbAutochoice) {
+							URI contentWebServiceResourceUri = UriBuilder
+									.fromUri(contentWebServiceResource.getWanUrl())
+									.path("resource").build();
 							Document notReturnedEntity = (Document) rb
 									.getUrlParsingRespresentation(
 											urlParsingId,
-											uriInfo,
+											getExternalUri(),
 											urlParsingRegistry,
-											contentWebServiceResource.path(
-													"resource").getURI());
+											contentWebServiceResourceUri);
 							Node notReturnedEntityRoot = notReturnedEntity
 									.getFirstChild();
 
