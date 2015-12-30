@@ -721,11 +721,12 @@ public class ResourceEditionAPI extends ApiscolApi {
 						// answer
 						if (!thumbAutochoice) {
 							URI contentWebServiceResourceUri = UriBuilder
-									.fromUri(contentWebServiceResource.getWanUrl())
+									.fromUri(
+											contentWebServiceResource
+													.getWanUrl())
 									.path("resource").build();
 							Document notReturnedEntity = (Document) rb
-									.getUrlParsingRespresentation(
-											urlParsingId,
+									.getUrlParsingRespresentation(urlParsingId,
 											getExternalUri(),
 											urlParsingRegistry,
 											contentWebServiceResourceUri);
@@ -1238,6 +1239,11 @@ public class ResourceEditionAPI extends ApiscolApi {
 							+ "not for " + metadataId);
 
 		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
+		if (imageUrl.startsWith(contentWebServiceResource.getWanUrl()
+				.toString())) {
+			imageUrl = imageUrl.replace(contentWebServiceResource.getWanUrl()
+					.toString(), contentWebServiceResource.getURI().toString());
+		}
 		MultivaluedMap<String, String> iconsQueryParams = new MultivaluedMapImpl();
 		iconsQueryParams.add("mdid", metadataId);
 		iconsQueryParams.add("src", imageUrl);
