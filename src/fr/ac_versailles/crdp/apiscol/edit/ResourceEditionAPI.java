@@ -36,6 +36,7 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.StringUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -688,7 +689,9 @@ public class ResourceEditionAPI extends ApiscolApi {
 				logger.info("Url found for POST request deduplication : "
 						+ m.group(1));
 				MultivaluedMap<String, String> queryParams = new MultivaluedMapImpl();
-				String urlParam = URLEncoder.encode(url, "UTF-8");
+
+				String urlParam = URLEncoder.encode(
+						StringEscapeUtils.unescapeXml(url), "UTF-8");
 				queryParams
 						.add("static-filters", String.format(
 								"[\"technical.location::%s\"]", urlParam));
