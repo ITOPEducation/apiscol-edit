@@ -6,9 +6,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
@@ -60,6 +64,7 @@ import fr.ac_versailles.crdp.apiscol.representations.EntitiesRepresentationBuild
 import fr.ac_versailles.crdp.apiscol.representations.IEntitiesRepresentationBuilder;
 import fr.ac_versailles.crdp.apiscol.restClient.LanWebResource;
 import fr.ac_versailles.crdp.apiscol.utils.FileUtils;
+import fr.ac_versailles.crdp.apiscol.utils.XMLUtils;
 
 @Path("/")
 public class ResourceEditionAPI extends ApiscolApi {
@@ -361,6 +366,17 @@ public class ResourceEditionAPI extends ApiscolApi {
 		return StringUtils.EMPTY;
 	}
 
+	private Integer extractLengthFromReport(Document doc) {
+		Element root = doc.getDocumentElement();
+		NodeList lengthElements = root.getElementsByTagName("apiscol:length");
+		if (lengthElements.getLength() != 1) {
+			return null;
+		}
+		Element lengthElement = (Element) lengthElements.item(0);
+
+		return Integer.parseInt(lengthElement.getTextContent());
+	}
+
 	@POST
 	@Path("/transfer")
 	@Produces({ MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_XML })
@@ -634,9 +650,12 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormDataParam("file") InputStream uploadedInputStream,
 			@FormDataParam("file") FormDataContentDisposition fileDetail,
 			@DefaultValue("false") @FormDataParam(value = "url_autodetect") final boolean urlAutoDetect,
-			@DefaultValue("false") @FormDataParam(value = "thumb_autochoice") final boolean thumbAutochoice)
+			@DefaultValue("false") @FormDataParam(value = "thumb_autochoice") final boolean thumbAutochoice,
+			@DefaultValue("false") @FormDataParam(value = "deduplicate") final boolean deduplicate)
 			throws ContentServiceFailureException,
-			UnknownMetadataRepositoryException, UnknownMetadataException {
+			UnknownMetadataRepositoryException, UnknownMetadataException,
+			UnsupportedEncodingException, MetaServiceFailureException,
+			DeduplicationException {
 		if (!syncServiceInitialized)
 			SyncService.notifyUriInfo(getExternalUri());
 		File file = writeToTempFile(uploadedInputStream);
@@ -647,6 +666,112 @@ public class ResourceEditionAPI extends ApiscolApi {
 			logger.warn(String
 					.format("A probleme was encountered while closing the input streamm for file %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
+		}
+		if (deduplicate == true) {
+			// check if metadata contains technical location
+			String fileContent = null;
+			try {
+				fileContent = FileUtils
+						.readFileAsString(file.getAbsolutePath());
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			fileContent = fileContent.replaceAll("(\\r|\\n|\\s)", "");
+			Pattern locationPattern = Pattern
+					.compile("<technical>.*<location>([^<]+)");
+			Matcher m = locationPattern.matcher(fileContent);
+			String url = null;
+			if (m.find()) {
+
+				url = m.group(1);
+				logger.info("Url found for POST request deduplication : "
+						+ m.group(1));
+				MultivaluedMap<String, String> queryParams = new MultivaluedMapImpl();
+				String urlParam = URLEncoder.encode(url, "UTF-8");
+				queryParams
+						.add("static-filters", String.format(
+								"[\"technical.location::%s\"]", urlParam));
+				ClientResponse metadataWebServiceResponse = null;
+				try {
+					metadataWebServiceResponse = metadataWebServiceResource
+							.queryParams(queryParams)
+							.accept(MediaType.APPLICATION_XML_TYPE)
+							.get(ClientResponse.class);
+					int status = metadataWebServiceResponse.getStatus();
+
+					if (Response.Status.OK.getStatusCode() == status) {
+						Document response = metadataWebServiceResponse
+								.getEntity(Document.class);
+						System.out.println(XMLUtils.XMLToString(response));
+						Integer length = extractLengthFromReport(response);
+						if (null == length) {
+							throw new MetaServiceFailureException(
+									"Impossible to find unique length elemment in metadata web service response "
+											+ XMLUtils.XMLToString(response));
+						}
+						logger.info("metadata web service response for ressource with "
+								+ url
+								+ " as content location : length :"
+								+ length);
+						if (length > 1) {
+							throw new DeduplicationException(
+									"Impossible to deduplicate by content url "
+											+ url
+											+ ", there are "
+											+ length
+											+ "metadata entries with the same url");
+						}
+						if (length == 1) {
+							String metadataId = extractUriFromReport(response,
+									"text/html");
+							logger.info("There is an entry with content.location set to "
+									+ url
+									+ " in metadata service and its URI is "
+									+ metadataId);
+
+							if (metadataId
+									.startsWith(metadataWebServiceResource
+											.getWanUrl().toString())) {
+								metadataId = metadataId
+										.replace(
+												new StringBuilder()
+														.append(metadataWebServiceResource
+																.getWanUrl()
+																.toString())
+														.append('/').toString(),
+												"");
+								logger.info("Deduplication : POST request turned into PUT for metadata id "
+										+ metadataId);
+								return updateMetadataWithFile(metadataId, file,
+										null, false);
+							} else {
+								throw new UnknownMetadataException(
+										"Impossible to deduplicate on URI "
+												+ metadataId
+												+ " : it does not belong to metadata repository located in "
+												+ metadataWebServiceResource
+														.getWanUrl().toString());
+							}
+
+						} else {
+							logger.info("Impossible to deduplicate : there is no entry in metadata repository with url "
+									+ url);
+						}
+
+					} else {
+						throw new MetaServiceFailureException(
+								"Meta web service didn't answer when asked for entries with content.location set to "
+										+ url);
+					}
+				} catch (ClientHandlerException e) {
+					e.printStackTrace();
+
+				}
+			} else {// technical location not found
+				logger.warn("No technical location found in metadata file for deduplication");
+			}
+
 		}
 		FormDataMultiPart form = null;
 		ClientResponse cr = null;
@@ -672,7 +797,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 		if (Response.Status.OK.getStatusCode() == status) {
 			Document response = cr.getEntity(Document.class);
-			if (urlAutoDetect) {
+			if (urlAutoDetect && !deduplicate) {
 				String contentUrl = this
 						.extractContentUrlFromMetadataResponse(response);
 				String metadataId = extractUriFromReport(response, "text/html");
@@ -885,16 +1010,26 @@ public class ResourceEditionAPI extends ApiscolApi {
 					.format("A probleme was encountered while closing the input streamm for file %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
 		}
+		return updateMetadataWithFile(metadataId, file, ifMatch, true);
+
+	}
+
+	private Response updateMetadataWithFile(String metadataId, File file,
+			String ifMatch, boolean enableConcurrencyControl) {
 		FormDataMultiPart form = null;
 		ClientResponse cr = null;
 		try {
 			form = new FormDataMultiPart().field("file", file,
 					MediaType.MULTIPART_FORM_DATA_TYPE).field("edit_uri",
 					getExternalUri().toString());
+			if (!enableConcurrencyControl) {
+				ifMatch = "whatyouwant";
+				form.field("enable_concurrency_control", "false");
+			}
 			cr = metadataWebServiceResource.path(metadataId)
+					.header(HttpHeaders.IF_MATCH, ifMatch)
 					.accept(MediaType.APPLICATION_XML)
-					.type(MediaType.MULTIPART_FORM_DATA)
-					.header(HttpHeaders.IF_MATCH, ifMatch).entity(form)
+					.type(MediaType.MULTIPART_FORM_DATA).entity(form)
 					.put(ClientResponse.class);
 
 		} finally {
