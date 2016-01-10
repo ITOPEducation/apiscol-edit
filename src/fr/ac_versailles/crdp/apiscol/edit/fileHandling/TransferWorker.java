@@ -60,7 +60,7 @@ public class TransferWorker implements Runnable {
 			out.setWritable(true, false);
 		} catch (FileNotFoundException e) {
 			caller.notifyProblemOnFileSystem(identifier, resourceId,
-					"We had a problem creating the file to the file server file not found :"
+					"We had a problem creating the file to the file server : file not found :"
 							+ out.getAbsolutePath());
 			return false;
 		} catch (IOException e) {

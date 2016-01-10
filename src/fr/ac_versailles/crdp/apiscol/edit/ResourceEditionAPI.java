@@ -706,7 +706,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 					if (Response.Status.OK.getStatusCode() == status) {
 						Document response = metadataWebServiceResponse
 								.getEntity(Document.class);
-						System.out.println(XMLUtils.XMLToString(response));
 						Integer length = extractLengthFromReport(response);
 						if (null == length) {
 							throw new MetaServiceFailureException(
@@ -1172,11 +1171,11 @@ public class ResourceEditionAPI extends ApiscolApi {
 	}
 
 	private File writeToTempFile(InputStream uploadedInputStream) {
-		String file = String.format("%s/%s", System
+		String filePath = String.format("%s/%s", System
 				.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
 		try {
 
-			OutputStream out = new FileOutputStream(file);
+			OutputStream out = new FileOutputStream(filePath);
 			int read = 0;
 			byte[] bytes = new byte[1024];
 			while ((read = uploadedInputStream.read(bytes)) != -1) {
@@ -1188,7 +1187,31 @@ public class ResourceEditionAPI extends ApiscolApi {
 			// TODO mapper l'exception
 			e.printStackTrace();
 		}
-		return new File(file);
+		return new File(filePath);
+	}
+
+	private File writeToResourceDirectory(InputStream uploadedInputStream,
+			String resourceId, String fileName) {
+		File resourceDirectory = ResourceEditionAPI.getResourceDirectory(
+				fileRepoPath, resourceId);
+		String filePath = String.format("%s/%s%s",
+				resourceDirectory.getAbsolutePath(), temporaryFilesPrefix,
+				fileName);
+		try {
+
+			OutputStream out = new FileOutputStream(filePath);
+			int read = 0;
+			byte[] bytes = new byte[1024];
+			while ((read = uploadedInputStream.read(bytes)) != -1) {
+				out.write(bytes, 0, read);
+			}
+			out.flush();
+			out.close();
+		} catch (IOException e) {
+			// TODO mapper l'exception
+			e.printStackTrace();
+		}
+		return new File(filePath);
 	}
 
 	@POST
@@ -1270,7 +1293,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			uploadedInputStream.close();
 		} catch (IOException e) {
 			logger.warn(String
-					.format("A probleme was encountered while closing the input streamm for image (custom thumb) %s : %s",
+					.format("A probleme was encountered while closing the input stream for image (custom thumb) %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
 		}
 		Document thumbsDocument = null;
@@ -1453,6 +1476,55 @@ public class ResourceEditionAPI extends ApiscolApi {
 							metadataId, entity));
 		}
 
+	}
+
+	// begin send custom thumb
+	@POST
+	@Path("/preview")
+	@Produces({ MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_XML })
+	@Consumes(MediaType.MULTIPART_FORM_DATA)
+	public Response sendCustomPreview(@Context HttpServletRequest request,
+			@FormDataParam("image") InputStream uploadedInputStream,
+			@FormDataParam("image") FormDataContentDisposition fileDetail,
+			@FormDataParam("resid") String resourceId)
+			throws UnknownMetadataException {
+		File image = writeToResourceDirectory(uploadedInputStream, resourceId,
+				fileDetail.getFileName());
+		try {
+			uploadedInputStream.close();
+		} catch (IOException e) {
+			logger.warn(String
+					.format("A probleme was encountered while closing the input stream for image (custom preview) %s : %s",
+							fileDetail.getFileName(), e.getMessage()));
+		}
+		Document contentDocument = null;
+		ClientResponse contentWebServiceResponse = null;
+		MultivaluedMap<String, String> form = new MultivaluedMapImpl();
+		form.add("image_file_name", image.getName());
+		String ifMatch = request.getHeader(HttpHeaders.IF_MATCH);
+		contentWebServiceResponse = contentWebServiceResource.path("resource")
+				.path(resourceId).path("preview")
+				.accept(MediaType.APPLICATION_XML)
+				.type(MediaType.APPLICATION_FORM_URLENCODED)
+				.header(HttpHeaders.IF_MATCH, ifMatch).entity(form)
+				.put(ClientResponse.class);
+
+		int status = contentWebServiceResponse.getStatus();
+		if (Response.Status.OK.getStatusCode() == status) {
+			contentDocument = contentWebServiceResponse
+					.getEntity(Document.class);
+			return Response.status(contentWebServiceResponse.getStatus())
+					.type(contentWebServiceResponse.getType())
+					.header("Access-Control-Allow-Origin", "*")
+					.entity(contentDocument).build();
+		} else {
+			String stringResponse = contentWebServiceResponse
+					.getEntity(String.class);
+			return Response.status(status)
+					.type(contentWebServiceResponse.getType())
+					.header("Access-Control-Allow-Origin", "*")
+					.entity(stringResponse).build();
+		}
 	}
 
 	@PUT
