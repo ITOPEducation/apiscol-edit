@@ -1488,8 +1488,20 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormDataParam("image") FormDataContentDisposition fileDetail,
 			@FormDataParam("resid") String resourceId)
 			throws UnknownMetadataException {
+		if (uploadedInputStream == null || fileDetail == null) {
+			return Response
+					.status(com.sun.jersey.api.client.ClientResponse.Status.NOT_ACCEPTABLE)
+					.type(MediaType.APPLICATION_ATOM_XML)
+					.header("Access-Control-Allow-Origin", "*")
+					.entity("Posting a file is mandatory when you want to assign a custom preview")
+					.build();
+		}
+		if (ResourcesKeySyntax.isUrn(resourceId)) {
+			resourceId = ResourcesKeySyntax
+					.extractResourceIdFromUrn(resourceId);
+		}
 		File image = writeToResourceDirectory(uploadedInputStream, resourceId,
-				fileDetail.getFileName());
+				fileDetail.getName());
 		try {
 			uploadedInputStream.close();
 		} catch (IOException e) {
