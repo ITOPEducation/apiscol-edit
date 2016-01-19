@@ -302,7 +302,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormParam(value = "url") final String url,
 			@FormParam(value = "main_filename") final String mainFileName,
 			@FormParam(value = "type") final String scormType,
-			@DefaultValue("true") @FormParam(value = "update") final boolean updateArchive) {
+			@DefaultValue("true") @FormParam(value = "update") final boolean updatePreview) {
 		if (!syncServiceInitialized)
 			SyncService.notifyUriInfo(getExternalUri());
 		if (StringUtils.isBlank(resourceId))
@@ -320,7 +320,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		if (StringUtils.isNotBlank(mainFileName))
 			params.add("main_filename", mainFileName);
 		params.add("edit_uri", getExternalUri().toString());
-		params.add("update_preview", updateArchive ? "true" : "false");
+		params.add("update_preview", updatePreview ? "true" : "false");
 		ClientResponse response = contentWebServiceResource.path("resource")
 				.path(resourceId).accept(MediaType.APPLICATION_XML)
 				.header(HttpHeaders.IF_MATCH, ifMatch)
