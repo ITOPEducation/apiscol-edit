@@ -55,6 +55,7 @@ public class TransferRegistry {
 	private static Map<Integer, String> mainFileNames = new ConcurrentHashMap<Integer, String>();
 	private static Map<Integer, Boolean> mainFiles = new ConcurrentHashMap<Integer, Boolean>();
 	private static Map<Integer, Boolean> updateArchives = new ConcurrentHashMap<Integer, Boolean>();
+	private static Map<Integer, Boolean> updatePreviews = new ConcurrentHashMap<Integer, Boolean>();
 	private static Map<Integer, TransferStates> transferStates = new ConcurrentHashMap<Integer, TransferStates>();
 	private static Map<Integer, String> messages = new ConcurrentHashMap<Integer, String>();
 	private static Map<Integer, String> resourcesIds = new ConcurrentHashMap<Integer, String>();
@@ -72,8 +73,8 @@ public class TransferRegistry {
 	}
 
 	public int newTransfer(String resourceId, byte[] bs, String fileName,
-			String mainFileName, boolean updateArchive, boolean mainFile,
-			String eTag, TransferTypes payload,
+			String mainFileName, boolean updateArchive, boolean updatePreview,
+			boolean mainFile, String eTag, TransferTypes payload,
 			ResourceEditionAPI resourceEditionAPI) {
 		// first the transfer worker will put the data on the file system
 		synchronized (counter) {
@@ -84,6 +85,7 @@ public class TransferRegistry {
 			// concurrenthashmap does not allow null value
 			transfers.put(counter, thread);
 			updateArchives.put(counter, updateArchive);
+			updatePreviews.put(counter, updatePreview);
 			etags.put(counter, eTag == null ? StringUtils.EMPTY : eTag);
 			fileNames.put(counter, fileName == null ? StringUtils.EMPTY
 					: fileName);
@@ -106,6 +108,8 @@ public class TransferRegistry {
 		transfers.remove(identifier);
 		String updateArchive = updateArchives.get(identifier) == null ? "false"
 				: updateArchives.get(identifier).toString();
+		String updatePreview = updatePreviews.get(identifier) == null ? "false"
+				: updatePreviews.get(identifier).toString();
 		messages.put(identifier, String.format(
 				"File %s is being registred and indexed",
 				fileNames.get(identifier)));
@@ -113,8 +117,9 @@ public class TransferRegistry {
 		ClientResponse response = null;
 		FormDataMultiPart form = null;
 		try {
-			form = new FormDataMultiPart().field("update_archive",
-					updateArchive)
+			form = new FormDataMultiPart()
+					.field("update_archive", updateArchive)
+					.field("update_preview", updatePreview)
 					.field("file_name", fileNames.get(identifier));
 
 			switch (transferTypes.get(identifier)) {

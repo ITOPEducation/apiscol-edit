@@ -387,6 +387,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormDataParam(value = "resid") String resourceId,
 			@FormDataParam(value = "main_filename") final String mainFileName,
 			@DefaultValue("true") @FormDataParam(value = "update_archive") final boolean updateArchive,
+			@DefaultValue("true") @FormDataParam(value = "update_preview") final boolean updatePreview,
 			@DefaultValue("false") @FormDataParam(value = "is_archive") final boolean isArchive,
 			@DefaultValue("false") @FormDataParam(value = "main") final boolean mainFile,
 			@FormDataParam("file") InputStream uploadedInputStream,
@@ -422,7 +423,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		}
 		synchronized (transferRegistry) {
 			fileTransferId = transferRegistry.newTransfer(resourceId, data,
-					fileName, mainFileName, updateArchive, mainFile, eTag,
+					fileName, mainFileName, updateArchive, updatePreview,mainFile, eTag,
 					isArchive ? TransferRegistry.TransferTypes.ARCHIVE
 							: TransferRegistry.TransferTypes.FILE, this);
 		}
@@ -1478,7 +1479,6 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 	}
 
-	// begin send custom thumb
 	@POST
 	@Path("/preview")
 	@Produces({ MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_XML })
