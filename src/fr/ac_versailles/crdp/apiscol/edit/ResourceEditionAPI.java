@@ -302,7 +302,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			@FormParam(value = "url") final String url,
 			@FormParam(value = "main_filename") final String mainFileName,
 			@FormParam(value = "type") final String scormType,
-			@DefaultValue("true") @FormParam(value = "update") final boolean updatePreview) {
+			@DefaultValue("true") @FormParam(value = "update_preview") final boolean updatePreview) {
 		if (!syncServiceInitialized)
 			SyncService.notifyUriInfo(getExternalUri());
 		if (StringUtils.isBlank(resourceId))
@@ -378,6 +378,20 @@ public class ResourceEditionAPI extends ApiscolApi {
 		return Integer.parseInt(lengthElement.getTextContent());
 	}
 
+	/**
+	 * 
+	 * @param request
+	 * @param resourceId
+	 *            Resource identifier delivered by Apiscol Content
+	 * @param mainFileName
+	 * @param updateArchive
+	 * @param updatePreview
+	 * @param isArchive
+	 * @param mainFile
+	 * @param uploadedInputStream
+	 * @param fileDetail
+	 * @return
+	 */
 	@POST
 	@Path("/transfer")
 	@Produces({ MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_XML })
@@ -423,7 +437,8 @@ public class ResourceEditionAPI extends ApiscolApi {
 		}
 		synchronized (transferRegistry) {
 			fileTransferId = transferRegistry.newTransfer(resourceId, data,
-					fileName, mainFileName, updateArchive, updatePreview,mainFile, eTag,
+					fileName, mainFileName, updateArchive, updatePreview,
+					mainFile, eTag,
 					isArchive ? TransferRegistry.TransferTypes.ARCHIVE
 							: TransferRegistry.TransferTypes.FILE, this);
 		}
