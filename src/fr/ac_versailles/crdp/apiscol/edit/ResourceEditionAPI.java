@@ -172,7 +172,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 				.extractResourceIdFromUrn(resourceUrn);
 		File resourceDirectory = getResourceDirectory(fileRepoPath, resourceId);
 		if (!resourceDirectory.exists()) {
-			logger.error(String
+			getLogger().error(String
 					.format("Error while creating resource %s, directory %s was not created",
 							resourceUrn, resourceDirectory.getAbsolutePath()));
 		} else {
@@ -431,7 +431,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		try {
 			uploadedInputStream.close();
 		} catch (IOException e) {
-			logger.warn(String
+			getLogger().warn(String
 					.format("A probleme was encountered while closing the input stream for file %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
 		}
@@ -483,7 +483,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			String message = "If you want to parse the url "
 					+ url
 					+ " you should specify the resource id as 'resid' query parameter";
-			logger.warn(message);
+			getLogger().warn(message);
 			return Response.status(Status.BAD_REQUEST).entity(message)
 					.header("Access-Control-Allow-Origin", "*").build();
 		}
@@ -491,7 +491,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			String message = "If you want to parse an url for resource"
 					+ resourceId
 					+ " you should specify the url string as 'url' query parameter.";
-			logger.warn(message);
+			getLogger().warn(message);
 			return Response.status(Status.BAD_REQUEST).entity(message)
 					.header("Access-Control-Allow-Origin", "*").build();
 		}
@@ -680,7 +680,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 			uploadedInputStream.close();
 		} catch (IOException e) {
-			logger.warn(String
+			getLogger().warn(String
 					.format("A probleme was encountered while closing the input streamm for file %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
 		}
@@ -702,7 +702,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			if (m.find()) {
 
 				url = m.group(1);
-				logger.info("Url found for POST request deduplication : "
+				getLogger().info("Url found for POST request deduplication : "
 						+ m.group(1));
 				MultivaluedMap<String, String> queryParams = new MultivaluedMapImpl();
 
@@ -728,7 +728,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 									"Impossible to find unique length elemment in metadata web service response "
 											+ XMLUtils.XMLToString(response));
 						}
-						logger.info("metadata web service response for ressource with "
+						getLogger().info("metadata web service response for ressource with "
 								+ url
 								+ " as content location : length :"
 								+ length);
@@ -743,7 +743,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 						if (length == 1) {
 							String metadataId = extractUriFromReport(response,
 									"text/html");
-							logger.info("There is an entry with content.location set to "
+							getLogger().info("There is an entry with content.location set to "
 									+ url
 									+ " in metadata service and its URI is "
 									+ metadataId);
@@ -759,7 +759,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 																.toString())
 														.append('/').toString(),
 												"");
-								logger.info("Deduplication : POST request turned into PUT for metadata id "
+								getLogger().info("Deduplication : POST request turned into PUT for metadata id "
 										+ metadataId);
 								return updateMetadataWithFile(metadataId, file,
 										null, false);
@@ -773,7 +773,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 							}
 
 						} else {
-							logger.info("Impossible to deduplicate : there is no entry in metadata repository with url "
+							getLogger().info("Impossible to deduplicate : there is no entry in metadata repository with url "
 									+ url);
 						}
 
@@ -787,7 +787,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 				}
 			} else {// technical location not found
-				logger.warn("No technical location found in metadata file for deduplication");
+				getLogger().warn("No technical location found in metadata file for deduplication");
 			}
 
 		}
@@ -821,9 +821,9 @@ public class ResourceEditionAPI extends ApiscolApi {
 				String metadataId = extractUriFromReport(response, "text/html");
 
 				if (StringUtils.isEmpty(contentUrl)) {
-					logger.warn("Autodetection of url impossible : no url provided");
+					getLogger().warn("Autodetection of url impossible : no url provided");
 				} else {
-					logger.info("Autodetection de l'url " + contentUrl);
+					getLogger().info("Autodetection de l'url " + contentUrl);
 					ClientResponse contentClientResponse = createEmptyResource(
 							metadataId, "url");
 					Document contentXmlResponse = null;
@@ -925,13 +925,13 @@ public class ResourceEditionAPI extends ApiscolApi {
 													metadataId,
 													thumbsWebServiceResponse
 															.getEntity(String.class));
-									logger.error(message);
+									getLogger().error(message);
 
 								} else {
 									thumbsDocument = thumbsWebServiceResponse
 											.getEntity(Document.class);
 									thumbUri = extractThumbUriFromThumbRepresentation(thumbsDocument);
-									logger.info(String
+									getLogger().info(String
 											.format("The thumbs ws service response for mdid %s was ok with uri %s ",
 													metadataId, thumbUri));
 									updateThumbUriInMetadatas(metadataId,
@@ -940,7 +940,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 								// nothing to do with the response
 							} catch (Exception e) {
-								logger.error("It seems impossible to delete the thumb attached to this resource "
+								getLogger().error("It seems impossible to delete the thumb attached to this resource "
 										+ metadataId);
 								e.printStackTrace();
 							}
@@ -1024,7 +1024,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		try {
 			uploadedInputStream.close();
 		} catch (IOException e) {
-			logger.warn(String
+			getLogger().warn(String
 					.format("A probleme was encountered while closing the input streamm for file %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
 		}
@@ -1102,16 +1102,24 @@ public class ResourceEditionAPI extends ApiscolApi {
 			Document thumbXMLResponse = thumbsWebServiceResponse1
 					.getEntity(Document.class);
 			String thumbEtag = extractEtagFromThumbDocument(thumbXMLResponse);
-			MultivaluedMap<String, String> thumbsQueryParams2 = new MultivaluedMapImpl();
-			thumbsQueryParams2.add("mdid",
-					extractUriFromReport(metaXmlResponse, "text/html"));
-			thumbsWebServiceResource.queryParams(thumbsQueryParams2)
-					.accept(MediaType.APPLICATION_XML_TYPE)
-					.header(HttpHeaders.IF_MATCH, thumbEtag)
-					.delete(ClientResponse.class);
+			if (thumbEtag != null) {
+				MultivaluedMap<String, String> thumbsQueryParams2 = new MultivaluedMapImpl();
+				thumbsQueryParams2.add("mdid",
+						extractUriFromReport(metaXmlResponse, "text/html"));
+				thumbsWebServiceResource.queryParams(thumbsQueryParams2)
+						.accept(MediaType.APPLICATION_XML_TYPE)
+						.header(HttpHeaders.IF_MATCH, thumbEtag)
+						.delete(ClientResponse.class);
+			} else {
+				getLogger().error("Impossible to get etag from thumb web service for metadata "
+						+ metadataId);
+				getLogger().error("Thumb web service answer : "
+						+ XMLUtils.XMLToString(thumbXMLResponse));
+			}
+
 			// nothing to do with the response
 		} catch (Exception e) {
-			logger.error("It seems impossible to delete the thumb attached to this resource "
+			getLogger().error("It seems impossible to delete the thumb attached to this resource "
 					+ metadataId);
 			e.printStackTrace();
 		}
@@ -1129,9 +1137,12 @@ public class ResourceEditionAPI extends ApiscolApi {
 	}
 
 	private String extractEtagFromThumbDocument(Document doc) {
-		// TODO better catch of exceptions
-		return ((Element) doc.getDocumentElement()
-				.getElementsByTagName("thumb").item(0)).getAttribute("version");
+		NodeList thumbs = doc.getDocumentElement()
+				.getElementsByTagName("thumb");
+		if (thumbs.getLength() == 0) {
+			return null;
+		}
+		return ((Element) thumbs.item(0)).getAttribute("version");
 	}
 
 	private String extractEtagFromContentDocument(Document doc) {
@@ -1308,7 +1319,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		try {
 			uploadedInputStream.close();
 		} catch (IOException e) {
-			logger.warn(String
+			getLogger().warn(String
 					.format("A probleme was encountered while closing the input stream for image (custom thumb) %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
 		}
@@ -1334,7 +1345,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			e.printStackTrace();
 		}
 		String thumbUri = extractThumbUriFromThumbRepresentation(thumbsDocument);
-		logger.info(String
+		getLogger().info(String
 				.format("The thumbs ws service response for mdid %s was ok with uri %s ",
 						metadataId, thumbUri));
 		int status = thumbsWebServiceResponse.getStatus();
@@ -1437,7 +1448,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 					.format("The thumbs ws service response for  mdid %s was not ok with message %s ",
 							metadataId,
 							thumbsWebServiceResponse.getEntity(String.class));
-			logger.error(message);
+			getLogger().error(message);
 			return Response.status(thumbsWebServiceResponse.getStatus())
 					.entity(message).type(MediaType.TEXT_PLAIN)
 					.header("Access-Control-Allow-Origin", "*").build();
@@ -1445,7 +1456,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		} else {
 			thumbsDocument = thumbsWebServiceResponse.getEntity(Document.class);
 			thumbUri = extractThumbUriFromThumbRepresentation(thumbsDocument);
-			logger.info(String
+			getLogger().info(String
 					.format("The thumbs ws service response for mdid %s was ok with uri %s ",
 							metadataId, thumbUri));
 		}
@@ -1469,7 +1480,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 			String message = String
 					.format("Error while trying to retrieve metadata %s (updating thumb uri) with message %s : abort",
 							metadataId, metaRepresentation);
-			logger.error(message);
+			getLogger().error(message);
 			throw new UnknownMetadataException(message);
 
 		}
@@ -1487,7 +1498,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 
 		if (metaPutResponse.getStatus() != Status.OK.getStatusCode()) {
 			String entity = metaPutResponse.getEntity(String.class);
-			logger.warn(String
+			getLogger().warn(String
 					.format("Failed to update technical informations for metadata %s with message %s : abort",
 							metadataId, entity));
 		}
@@ -1520,7 +1531,7 @@ public class ResourceEditionAPI extends ApiscolApi {
 		try {
 			uploadedInputStream.close();
 		} catch (IOException e) {
-			logger.warn(String
+			getLogger().warn(String
 					.format("A probleme was encountered while closing the input stream for image (custom preview) %s : %s",
 							fileDetail.getFileName(), e.getMessage()));
 		}
